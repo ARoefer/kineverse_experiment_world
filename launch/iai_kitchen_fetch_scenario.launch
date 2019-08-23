@@ -1,0 +1,6 @@
+<launch>
+    <node pkg="kineverse" type="kineverse_server.py" name="kineverse_server" output="screen"/>
+    <include file="$(find kineverse_experiment_world)/launch/fetch.launch"/>
+    <include file="$(find kineverse_experiment_world)/launch/iai_kitchen.launch"/>
+    <node pkg="kineverse_experiment_world" type="kitchen_bullet_world.py" name="kitchen_bullet_world"/>
+</launch>

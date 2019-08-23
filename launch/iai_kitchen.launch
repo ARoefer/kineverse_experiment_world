@@ -1,0 +1,3 @@
+<launch>
+    <node pkg="kineverse" type="upload_urdf.py" args="package://iai_kitchen/urdf_obj/IAI_kitchen.urdf true" name="iai_kitchen_uploader" output="screen"/>
+</launch>

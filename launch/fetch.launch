@@ -1,0 +1,3 @@
+<launch>
+    <node pkg="kineverse" type="upload_roomba_robot.py" args="package://fetch_description/robots/fetch.urdf" name="fetch_uploader" output="screen"/>
+</launch>
