@@ -1,6 +1,10 @@
 <launch>
+    <arg name="static_base" default="false"/>
+
     <node pkg="kineverse" type="kineverse_server.py" name="kineverse_server" output="screen"/>
-    <include file="$(find kineverse_experiment_world)/launch/fetch.launch"/>
+    <include file="$(find kineverse_experiment_world)/launch/fetch.launch">
+        <arg name="static_base" value="$(arg static_base)"/>
+    </include>
     <include file="$(find kineverse_experiment_world)/launch/iai_kitchen.launch"/>
-    <node pkg="kineverse_experiment_world" type="kitchen_bullet_world.py" name="kitchen_bullet_world"/>
+    <node pkg="kineverse_experiment_world" type="kitchen_bullet_world.py" name="kitchen_bullet_world" output="screen"/>
 </launch>
