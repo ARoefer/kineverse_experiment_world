@@ -34,7 +34,8 @@ if __name__ == '__main__':
     node.srv_add_rigid_body(req) # This is dumb!
 
     tmp_urdf = open('/tmp/temp_urdf.urdf', 'w') #tempfile.NamedTemporaryFile()
-    tmp_urdf.write(urdf_filler(URDF.from_xml_file(res_pkg_path('package://iai_kitchen/urdf_obj/IAI_kitchen.urdf'))).to_xml_string())
+    filled_model = urdf_filler(URDF.from_xml_file(res_pkg_path('package://iai_kitchen/urdf_obj/IAI_kitchen.urdf')))
+    tmp_urdf.write(filled_model.to_xml_string())
     tmp_urdf.close()
     #tmp_urdf.write(urdf_filler(URDF.from_xml_file(res_pkg_path('package://faculty_lounge_kitchen_description/urdfs/kitchen.urdf'))).to_xml_string())
     #snd_urdf = URDF.from_xml_file('/tmp/temp_urdf.urdf')
@@ -55,12 +56,15 @@ if __name__ == '__main__':
     req.pose.orientation.w = math.cos(angle * 0.5)
     req.pose.orientation.z = math.sin(angle * 0.5)
 
+    with open('test_fetch.urdf', 'w') as test:
+        test.write(URDF.from_xml_file(res_pkg_path(req.urdf_path)).to_xml_string())
+
     node.srv_add_urdf(req) # Still reeeeeeally stupid!
 
     sim     = node.sim
     kitchen = sim.get_body('iai_kitchen')
     fetch   = sim.get_body('fetch')
-    fetch.joint_driver = FetchDriver(1, 0.6)
+    fetch.joint_driver = FetchDriver(1, 0.6, 'linear_joint', z_ang_joint='angular_joint')
 
     #sim.register_plugin(JSPublisher(kitchen, 'iai_kitchen'))
     #sim.register_plugin(JSPublisher(fetch, 'fetch'))
