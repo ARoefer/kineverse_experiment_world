@@ -75,7 +75,7 @@ class PoseObservationPublisher(SimulatorPlugin):
                     points.append(noisy_pos)
                     msg.pose.position.x = noisy_pos[0]
                     msg.pose.position.y = noisy_pos[1]
-                    msg.pose.position.x = noisy_pos[2]
+                    msg.pose.position.z = noisy_pos[2]
                     msg.pose.orientation.x = pose.quaternion[0]
                     msg.pose.orientation.y = pose.quaternion[1]
                     msg.pose.orientation.z = pose.quaternion[2]
