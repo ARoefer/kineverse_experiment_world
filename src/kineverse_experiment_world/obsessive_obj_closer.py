@@ -2,17 +2,23 @@ import rospy
 import numpy as np
 
 from kineverse.gradients.gradient_math       import *
-from kineverse.gradients.diff_logic          import create_pos, erase_type, get_symbol_type, TYPE_POSITION
+from kineverse.gradients.gradient_container  import collect_free_symbols
+from kineverse.gradients.diff_logic          import erase_type, get_symbol_type, TYPE_POSITION
 from kineverse.model.paths                   import Path
-from kineverse.model.geometry_model          import GeometryModel, closest_distance, closest_distance_constraint
+from kineverse.model.kinematic_model         import Constraint
+from kineverse.model.geometry_model          import GeometryModel, contact_geometry, generate_contact_model
 from kineverse.motion.min_qp_builder         import GeomQPBuilder  as GQPB,\
                                                     TypedQPBuilder as TQPB,\
                                                     SoftConstraint as SC,\
-                                                    ControlledValue
+                                                    PID_Constraint as PIDC, \
+                                                    ControlledValue, \
+                                                    generate_controlled_values, \
+                                                    depth_weight_controlled_values
 from kineverse.network.model_client          import ModelClient
 from kineverse.operations.urdf_operations    import URDFRobot
 from kineverse.operations.special_kinematics import RoombaJoint
 from kineverse.type_sets                     import is_symbolic
+from kineverse.time_wrapper                  import Time
 from kineverse.visualization.bpb_visualizer  import ROSBPBVisualizer
 
 from nav_msgs.msg    import Odometry   as OdometryMsg
@@ -31,7 +37,7 @@ class ObsessiveObjectCloser(object):
         self.robot_eef          = None
         self.robot_camera       = None
         self.base_joint         = None
-        self.state = {}
+        self.state              = {}
         self.robot_js_aliases   = None
         self.inverse_js_aliases = {}
         self.obj_js_aliases     = None
@@ -43,6 +49,7 @@ class ObsessiveObjectCloser(object):
         self.pushing_controller = None
         self._needs_odom        = False
         self._has_odom          = False
+        self._t_last_update     = None
 
         self.debug_visualizer = ROSBPBVisualizer('/debug_vis', 'map')
 
@@ -150,6 +157,14 @@ class ObsessiveObjectCloser(object):
 
     @profile
     def cb_robot_joint_state(self, state_msg):
+        if self._t_last_update is None:
+            self._t_last_update = Time.now()
+            return
+
+        now = Time.now()
+        dt  = (now - self._t_last_update).to_sec()
+        self._t_last_update = now
+
         if self.robot_js_aliases is None:
             return
 
@@ -164,7 +179,7 @@ class ObsessiveObjectCloser(object):
                 str_state = {str(s): v for s, v in self.state.items() if s in self.idle_controller.free_symbols}
 
                 print('Idling around...')
-                cmd = self.idle_controller.get_cmd(self.state)
+                cmd = self.idle_controller.get_cmd(self.state, deltaT=dt)
         else:
             if self.pushing_controller is not None:
                 if not self._needs_odom or self._has_odom:
@@ -172,15 +187,14 @@ class ObsessiveObjectCloser(object):
 
                     #print('Full diff of eef y-position:\n  {}'.format('\n  '.join(['{}: {}'.format(v, t.subs(self.state)) for v, t in self.goal_diff.gradients.items()])))
                     #print('Need to close {}'.format(self._current_target))
-                    now = rospy.Time.now()
-                    print('Distance: {}'.format(self.soft_constraints['keep_contact'].expr.subs(self.state)))
                     try:
-                        cmd = self.pushing_controller.get_cmd(self.state)
-                        time_taken = rospy.Time.now() - now
+                        now = Time.now()
+                        cmd = self.pushing_controller.get_cmd(self.state, deltaT=dt)
+                        time_taken = Time.now() - now
                         print('Command generated. Time taken: {} Rate: {} hz'.format(time_taken.to_sec(), 1.0 / time_taken.to_sec()))
-                    except:    
-                        time_taken = rospy.Time.now() - now
-                        print('Command generation failed. Time taken: {} Rate: {} hz'.format(time_taken.to_sec(), 1.0 / time_taken.to_sec()))
+                    except Exception as e:    
+                        time_taken = Time.now() - now
+                        print('Command generation failed. Time taken: {} Rate: {} hz\nError: {}'.format(time_taken.to_sec(), 1.0 / time_taken.to_sec(), e))
                     #print(self.pushing_controller.last_matrix_str())
                 else:
                     print('Waiting for odom...')
@@ -188,7 +202,7 @@ class ObsessiveObjectCloser(object):
         if len(cmd) > 0:
             #print('commands:\n  {}'.format('\n  '.join(['{}: {}'.format(s, v) for s, v in cmd.items()])))
             cmd_msg = JointStateMsg()
-            cmd_msg.header.stamp = rospy.Time.now()
+            cmd_msg.header.stamp = Time.now()
             cmd_msg.name, cmd_msg.velocity = zip(*[(self.inverse_js_aliases[erase_type(s)], v) for s, v in cmd.items()])
             cmd_msg.position = [0]*len(cmd_msg.name)
             cmd_msg.effort   = cmd_msg.position
@@ -208,10 +222,10 @@ class ObsessiveObjectCloser(object):
         if self.robot is None:
             return
         
-        arm_joint_names = ["shoulder_pan_joint", "shoulder_lift_joint", "upperarm_roll_joint",
+        arm_joint_names     = ["shoulder_pan_joint", "shoulder_lift_joint", "upperarm_roll_joint",
               "elbow_flex_joint", "forearm_roll_joint", "wrist_flex_joint", "wrist_roll_joint"]
-        arm_joint_positions  = [1.32, 1.40, -0.2, 1.72, 0.0, 1.66, 0.0]
-        tuck_state = {create_pos((self.robot_path + (n,)).to_symbol()): p for n, p in zip(arm_joint_names, arm_joint_positions)}
+        arm_joint_positions = [1.32, 1.40, -0.2, 1.72, 0.0, 1.66, 0.0]
+        tuck_state = {Position(self.robot_path + (n,)): p for n, p in zip(arm_joint_names, arm_joint_positions)}
         tucking_constraints = {'tuck {}'.format(s): SC(p - s, p - s, 1, s) for s, p in tuck_state.items() if s in self.robot_joint_symbols}
 
         print('Tuck state:\n  {}\nTucking constraints:\n  {}'.format('\n  '.join(['{}: {}'.format(k, v) for k, v in tuck_state.items()]), '\n  '.join(tucking_constraints.keys())))
@@ -226,9 +240,10 @@ class ObsessiveObjectCloser(object):
         controlled_symbols = self.robot_controlled_symbols
         
         hard_constraints = self.km.get_constraints_by_symbols(symbols.union(controlled_symbols))
-        self.geom_world = self.km.get_active_geometry(joint_symbols)
+        self.geom_world  = self.km.get_active_geometry(joint_symbols, include_static=True)
 
-        controlled_values, hard_constraints = self._extract_controlled_values(hard_constraints, controlled_symbols)
+        controlled_values, hard_constraints = generate_controlled_values(hard_constraints, controlled_symbols)
+        controlled_values = depth_weight_controlled_values(self.km, controlled_values)
 
         # for name in self.geom_world.names:
         #     path = Path(name)
@@ -252,38 +267,38 @@ class ObsessiveObjectCloser(object):
             return
 
         target_symbol = self.target_symbol_map[self._current_target]
-
         pose_path = self._current_target[len(self.urdf_path):] + ('pose',)
 
-        geom_distance = norm(point3(2, -1, 1.5) - pos_of(self.robot_eef.pose))
-        #geom_distance = closest_distance(self.robot_eef.pose, pose_path.get_data(self.obj), self.robot_eef_path, self._current_target)
-        #if not isinstance(geom_distance, GC):
-        #    geom_distance = GC(geom_distance)
-        #geom_distance[get_diff_symbol(target_symbol)] = 0
-        condition = less_than(geom_distance, 0.01)
+        robot_cp, object_cp, contact_normal = contact_geometry(self.robot_eef.pose, pose_path.get_data(self.obj), self.robot_eef_path, self._current_target)
+        geom_distance = dot(contact_normal, robot_cp - object_cp)
+        condition     = less_than(geom_distance, 0.01)
 
-        soft_constraints = {#'close {}'.format(self._current_target): SC(-condition, -condition, 10, target_symbol),
-                            'keep_contact': SC(-geom_distance, -geom_distance, 1, geom_distance)}
-        # soft_constraints = {'keep_contact': SC(0.2, 0.2, 1, pos_of(self.robot_eef.pose)[1])}
+        print('\n  '.join([str(x) for x in geom_distance.free_symbols]))
 
-        #self.goal_diff = GC(pos_of(self.robot_eef.pose)[1])
-        #self.goal_diff.do_full_diff()
+        soft_constraints = {'reach {}'.format(self._current_target): PIDC(geom_distance, geom_distance, 1, k_i=0.1),
+                            'close {}'.format(self._current_target): PIDC(target_symbol, target_symbol, 1, k_i=0.1)}
 
         self.soft_constraints = soft_constraints
 
         symbols = set()
         for c in soft_constraints.values():
-            symbols |= c.expr.free_symbols
+            if isinstance(c, PIDC):
+                symbols |= c.control_value.free_symbols
+            else:
+                symbols |= c.expr.free_symbols
 
         print('Generating push controller for symbols:\n {}'.format('\n '.join([str(s) for s in symbols])))
             
-        joint_symbols = self.robot_joint_symbols.intersection(symbols).union({target_symbol})
+        joint_symbols = self.robot_joint_symbols.union(symbols).union({target_symbol})
         controlled_symbols = self.robot_controlled_symbols.union({get_diff_symbol(target_symbol)})
 
         hard_constraints = self.km.get_constraints_by_symbols(symbols.union(controlled_symbols))
-        print('Constraints returned for {}:\n  {}'.format(', '.join([str(s) for s in controlled_symbols]), '\n  '.join(hard_constraints.keys())))
-        self.geom_world = self.km.get_active_geometry(joint_symbols)
-        controlled_values, filtered_hard_constraints = self._extract_controlled_values(hard_constraints, controlled_symbols)
+        hard_constraints.update(generate_contact_model(robot_cp, controlled_symbols, object_cp, contact_normal, {target_symbol}))
+
+        #print('Constraints returned for {}:\n  {}'.format(', '.join([str(s) for s in controlled_symbols]), '\n  '.join(hard_constraints.keys())))
+        self.geom_world  = self.km.get_active_geometry(joint_symbols)
+        controlled_values, filtered_hard_constraints = generate_controlled_values(hard_constraints, controlled_symbols)
+        controlled_values = depth_weight_controlled_values(self.km, controlled_values)
         # for name in self.geom_world.names:
         #     path = Path(name)
         #     if path != self._current_target:
@@ -292,31 +307,10 @@ class ObsessiveObjectCloser(object):
 
         print('Controlled Values:\n  {}'.format('\n  '.join([str(c) for c in controlled_values.values()])))
 
-        # self.pushing_controller = GQPB(self.geom_world, filtered_hard_constraints, soft_constraints, controlled_values, visualizer=self.debug_visualizer)
-        self.pushing_controller = TQPB(filtered_hard_constraints, soft_constraints, controlled_values)
+        self.pushing_controller = GQPB(self.geom_world, filtered_hard_constraints, soft_constraints, controlled_values, visualizer=self.debug_visualizer)
+        #self.pushing_controller = TQPB(filtered_hard_constraints, soft_constraints, controlled_values)
 
     def get_push_controller_logs(self):
         if self.pushing_controller is not None:
             return self.pushing_controller.H_dfs, self.pushing_controller.A_dfs, self.pushing_controller.cmd_df
         return None, None, None
-
-
-    @profile
-    def _extract_controlled_values(self, constraints, controlled_symbols):
-        print('Constraints before filtering:\n  {}'.format('\n  '.join(sorted(constraints.keys()))))
-        controlled_values = {}
-        to_remove = set()
-
-        for k, c in constraints.items():
-            if type(c.expr) is spw.Symbol and c.expr in controlled_symbols and str(c.expr) not in controlled_values and not is_symbolic(c.lower) and not is_symbolic(c.upper):
-                weight = 0.01 # if c.expr != roomba_joint.lin_vel and c.expr != roomba_joint.ang_vel else 0.2
-                controlled_values[str(c.expr)] = ControlledValue(c.lower, c.upper, c.expr, weight)
-                to_remove.add(k)
-
-        constraints = {k: c for k, c in constraints.items() if k not in to_remove}
-        for s in controlled_symbols:
-            if str(s) not in controlled_values:
-                controlled_values[str(s)] = ControlledValue(-1e9, 1e9, s, 0.01)
-
-        print('Constraints: \n  {}'.format('\n  '.join(sorted(constraints.keys()))))
-        return controlled_values, constraints
