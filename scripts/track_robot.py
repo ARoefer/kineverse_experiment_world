@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 import rospy
 
+from kineverse.visualization.plotting import convert_qp_builder_log, draw_recorders
+from kineverse.utils import res_pkg_path
+
 from kineverse_experiment_world.tracking_node import TrackerNode
 
 from geometry_msgs.msg import PoseStamped as PoseStampedMsg
@@ -8,7 +11,7 @@ from geometry_msgs.msg import PoseStamped as PoseStampedMsg
 
 if __name__ == '__main__':
     rospy.init_node('kineverse_tracking_node')
-    tracker = TrackerNode('/tracked/joint_states', '/pose_obs')
+    tracker = TrackerNode('/tracked/joint_states', '/pose_obs', 1)
 
     tracker.track('/iai_oven_area/links/sink_area_dish_washer_door', 'iai_kitchen/sink_area_dish_washer_door')
     tracker.track('/iai_oven_area/links/sink_area_left_upper_drawer_main', 'iai_kitchen/sink_area_left_upper_drawer_main')
@@ -27,3 +30,7 @@ if __name__ == '__main__':
         rospy.sleep(1000)
 
 
+    rec_w, rec_b, rec_c, recs = convert_qp_builder_log(tracker.integrator.qp_builder)
+
+    plot_dir = res_pkg_path('package://kineverse_experiment_world/test/plots')
+    draw_recorders([rec_b, rec_c] + [r for _, r in sorted(recs.items())], 1, 8, 4).savefig('{}/tracking_constraints.png'.format(plot_dir))

@@ -70,7 +70,6 @@ class TrackerNode(object):
                     state[syms[5]] = msg.position.z
 
                 def process_model_update(data):
-                    print('Received model update for: {}'.format(model_path))
                     self._generate_pose_constraints(model_path, data)
 
                 axis = vector3(*syms[:3])
@@ -116,7 +115,6 @@ class TrackerNode(object):
                     self.visualizer.draw_poses('obs_points', spw.eye(4), 0.1, 0.02, [p for p in poses if len(p.free_symbols) == 0])
                     self.visualizer.render()
 
-                #print('---\n{}'.format('\n'.join(['{}: {}'.format(n, c.expr.subs(self.integrator.state)) for n, c in self.soft_constraints.items() if 'align rotation' == n[-14:]])))
             else:
                 print('Integrator does not exist')
 
@@ -136,32 +134,17 @@ class TrackerNode(object):
             self.joints |= model.pose.free_symbols
             self.joint_aliases = {s: Path(erase_type(s))[-1] for s in self.joints}
 
-            axis = vector3(*[Position(Path(str_path) + (x,)) for x in ['ax', 'ay', 'az']])
-
-            #axis, angle = spw.axis_angle_from_matrix(rot_of(te.pose)) #spw.axis_angle_from_matrix((rot_of(model.pose).T * rot_of(te.pose)))
-            r_rot_control = axis #axis * angle
+            axis, angle = spw.axis_angle_from_matrix(rot_of(model.pose).T * rot_of(te.pose))
+            r_rot_control = axis * angle
 
             hack = rotation3_axis_angle([0, 0, 1], 0.0001)
 
-            axis, angle = spw.axis_angle_from_matrix(rot_of(model.pose))# * hack)
+            axis, angle = spw.axis_angle_from_matrix((rot_of(model.pose).T * (rot_of(model.pose) * hack)).T)
             c_aa = (axis * angle)
 
             r_dist = norm(r_rot_control - c_aa)
 
             self.soft_constraints['{} align rotation'.format(str_path)] = SC(-r_dist, -r_dist, 1, r_dist)
-
-            # self.soft_constraints['{} align rotation 0'.format(str_path)] = SC(r_rot_control[0],
-            #                                            r_rot_control[0],
-            #                                            1,
-            #                                            c_aa[0])
-            # self.soft_constraints['{} align rotation 1'.format(str_path)] = SC(r_rot_control[1],
-            #                                            r_rot_control[1],
-            #                                            1,
-            #                                            c_aa[1])
-            # self.soft_constraints['{} align rotation 2'.format(str_path)] = SC(r_rot_control[2],
-            #                                            r_rot_control[2],
-            #                                            1,
-            #                                            c_aa[2])
         
             dist = norm(pos_of(model.pose) - pos_of(te.pose))
             self.soft_constraints['{} align position'.format(str_path)] = SC(-dist, -dist, 1, dist)
