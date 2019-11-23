@@ -100,7 +100,7 @@ class TrackerNode(object):
                 if len(self.tracked_poses) == 0:
                     self.timer.shutdown()
 
-
+    @profile
     def cb_tick(self, timer_event):
         with self.lock:
             if self.integrator is not None:
@@ -118,38 +118,53 @@ class TrackerNode(object):
             else:
                 print('Integrator does not exist')
 
-
+    @profile
     def cb_process_obs(self, poses_msg):
         #print('Got new observation')
-        with self.lock:
-            for pose_msg in poses_msg.poses:
-                if pose_msg.header.frame_id in self.aliases and self.integrator is not None:
-                    self.tracked_poses[self.aliases[pose_msg.header.frame_id]].update_state(pose_msg.pose, self.integrator.state)
+        #with self.lock:
+        for pose_msg in poses_msg.poses:
+            if pose_msg.header.frame_id in self.aliases and self.integrator is not None:
+                self.tracked_poses[self.aliases[pose_msg.header.frame_id]].update_state(pose_msg.pose, self.integrator.state)
 
 
     def _generate_pose_constraints(self, str_path, model):
-        if str_path in self.tracked_poses:
-            te = self.tracked_poses[str_path]
+        with self.lock:
+            if str_path in self.tracked_poses:
+                align_rotation = '{} align rotation'.format(str_path)
+                align_position = '{} align position'.format(str_path)
+                if model is not None:
+                    te = self.tracked_poses[str_path]
 
-            self.joints |= model.pose.free_symbols
-            self.joint_aliases = {s: Path(erase_type(s))[-1] for s in self.joints}
+                    self.joints |= model.pose.free_symbols
+                    self.joint_aliases = {s: Path(erase_type(s))[-1] for s in self.joints}
 
-            axis, angle = spw.axis_angle_from_matrix(rot_of(model.pose).T * rot_of(te.pose))
-            r_rot_control = axis * angle
+                    axis, angle = spw.axis_angle_from_matrix(rot_of(model.pose).T * rot_of(te.pose))
+                    r_rot_control = axis * angle
 
-            hack = rotation3_axis_angle([0, 0, 1], 0.0001)
+                    hack = rotation3_axis_angle([0, 0, 1], 0.0001)
 
-            axis, angle = spw.axis_angle_from_matrix((rot_of(model.pose).T * (rot_of(model.pose) * hack)).T)
-            c_aa = (axis * angle)
+                    axis, angle = spw.axis_angle_from_matrix((rot_of(model.pose).T * (rot_of(model.pose) * hack)).T)
+                    c_aa = (axis * angle)
 
-            r_dist = norm(r_rot_control - c_aa)
+                    r_dist = norm(r_rot_control - c_aa)
 
-            self.soft_constraints['{} align rotation'.format(str_path)] = SC(-r_dist, -r_dist, 1, r_dist)
-        
-            dist = norm(pos_of(model.pose) - pos_of(te.pose))
-            self.soft_constraints['{} align position'.format(str_path)] = SC(-dist, -dist, 1, dist)
+                    self.soft_constraints[align_rotation] = SC(-r_dist, -r_dist, 1, r_dist)
+                
+                    dist = norm(pos_of(model.pose) - pos_of(te.pose))
+                    self.soft_constraints[align_position] = SC(-dist, -dist, 1, dist)
+                    self.generate_opt_problem()
+                else:
+                    regenerate_problem = False
+                    if align_position in self.soft_constraints:
+                        del self.soft_constraints[align_position]
+                        regenerate_problem = True
 
-            self.generate_opt_problem()
+                    if align_rotation in self.soft_constraints:
+                        del self.soft_constraints[align_rotation]
+                        regenerate_problem = True
+                
+                    if regenerate_problem:
+                        self.generate_opt_problem()
 
 
     def generate_opt_problem(self):
