@@ -23,7 +23,7 @@ from kineverse.visualization.ros_visualizer import ROSVisualizer
 from kineverse.time_wrapper                 import Time
 
 from kineverse_experiment_world.msg import PoseStampedArray as PSAMsg
-from sensor_msgs.msg                import JointState       as JointStateMsg
+from kineverse.msg                  import ValueMap         as ValueMapMsg
 
 TrackerEntry = namedtuple('TrackerEntry', ['pose', 'update_state', 'model_cb'])
 
@@ -31,7 +31,7 @@ class TrackerNode(object):
     def __init__(self, js_topic, obs_topic, integration_factor=0.05, iterations=30):
         self.km_client = ModelClient(None)
 
-        self._js_msg = JointStateMsg()
+        self._js_msg = ValueMapMsg()
         self._integration_factor = integration_factor
         self._iterations = iterations
 
@@ -45,8 +45,8 @@ class TrackerNode(object):
         
         self.visualizer = ROSVisualizer('/tracker_vis', 'map')
 
-        self.pub_js  = rospy.Publisher(js_topic,    JointStateMsg, queue_size=1)
-        self.sub_obs = rospy.Subscriber(obs_topic, PSAMsg, self.cb_process_obs, queue_size=5)
+        self.pub_js  = rospy.Publisher(  js_topic, ValueMapMsg, queue_size=1)
+        self.sub_obs = rospy.Subscriber(obs_topic,      PSAMsg, self.cb_process_obs, queue_size=5)
 
 
     def track(self, model_path, alias):
@@ -106,7 +106,7 @@ class TrackerNode(object):
             if self.integrator is not None:
                 self.integrator.run(self._integration_factor, self._iterations)
                 self._js_msg.header.stamp = Time.now()
-                self._js_msg.name, self._js_msg.position = zip(*[(n, self.integrator.state[s]) for s, n in self.joint_aliases.items()])
+                self._js_msg.symbol, self._js_msg.value = zip(*[(n, self.integrator.state[s]) for s, n in self.joint_aliases.items()])
                 self.pub_js.publish(self._js_msg)
 
                 if self.visualizer is not None:
@@ -136,7 +136,7 @@ class TrackerNode(object):
                     te = self.tracked_poses[str_path]
 
                     self.joints |= model.pose.free_symbols
-                    self.joint_aliases = {s: Path(erase_type(s))[-1] for s in self.joints}
+                    self.joint_aliases = {s: str(s) for s in self.joints}
 
                     axis, angle = spw.axis_angle_from_matrix(rot_of(model.pose).T * rot_of(te.pose))
                     r_rot_control = axis * angle

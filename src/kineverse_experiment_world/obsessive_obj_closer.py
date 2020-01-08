@@ -26,6 +26,9 @@ from sensor_msgs.msg import JointState as JointStateMsg
 
 goal_joints = {'prismatic', 'revolute'}
 
+# Bullet's convex to convex distance calc is off.
+BULLET_FIXED_OFFSET = 0.05
+
 
 class ObsessiveObjectCloser(object):
     def __init__(self, urdf_path, robot_eef, robot_camera, obj_js_topic, robot_topic_prefix, waiting_location=(0,0,0,0)):
@@ -270,13 +273,17 @@ class ObsessiveObjectCloser(object):
         pose_path = self._current_target[len(self.urdf_path):] + ('pose',)
 
         robot_cp, object_cp, contact_normal = contact_geometry(self.robot_eef.pose, pose_path.get_data(self.obj), self.robot_eef_path, self._current_target)
-        geom_distance = dot(contact_normal, robot_cp - object_cp)
+        geom_distance = dot(contact_normal, robot_cp - object_cp) + BULLET_FIXED_OFFSET
         condition     = less_than(geom_distance, 0.01)
+
+        cam_to_obj = pos_of(pose_path.get_data(self.obj)) - pos_of(self.robot_camera.pose)
+        lookat_dot = dot(self.robot_camera.pose * vector3(1,0,0), cam_to_obj) / norm(cam_to_obj)
 
         print('\n  '.join([str(x) for x in geom_distance.free_symbols]))
 
         soft_constraints = {'reach {}'.format(self._current_target): PIDC(geom_distance, geom_distance, 1, k_i=0.1),
-                            'close {}'.format(self._current_target): PIDC(target_symbol, target_symbol, 1, k_i=0.1)}
+                            'close {}'.format(self._current_target): PIDC(target_symbol, target_symbol, 1, k_i=0.1),
+                            }#'lookat {}'.format(self._current_target): SC(lookat_dot, lookat_dot, 0.2, lookat_dot)}
 
         self.soft_constraints = soft_constraints
 

@@ -10,11 +10,10 @@
     <node pkg="kineverse_experiment_world" type="kitchen_bullet_world.py" name="kitchen_bullet_world" output="screen"/>
 
     <group if="$(arg use_tracker)">
-        <node pkg="robot_state_publisher" type="robot_state_publisher" name="kitchen_tracking_result" output="screen" >
-            <param name="tf_prefix" value="tracked"/>
-            <remap from="robot_description" to="/iai_kitchen/robot_description"/>
-            <remap from="joint_states"      to="/tracked/joint_states"/>
+        <node pkg="kineverse" type="model_tf_publisher.py" name="kitchen_tracking_result" output="screen" >
+            <param name="model_path" value="iai_oven_area"/>
+            <param name="robot_description" value="/iai_kitchen/robot_description"/>
+            <param name="state_topic"       value="/tracked/state"/>
         </node>
-        <node name="tracked_kitchen_to_base" pkg="tf" type="static_transform_publisher" output="screen" respawn="true" args="0 0 0 0 0 0 1 map tracked/room_link 20"/>
     </group>
 </launch>
