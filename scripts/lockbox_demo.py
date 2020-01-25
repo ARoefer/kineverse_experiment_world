@@ -38,9 +38,9 @@ class Lockbox(Scenario):
         self.lock_f_v = DiffSymbol(self.lock_f_p)
 
         b_open_threshold = 0.4
-        c_open_threshold = 0.15
-        d_open_threshold = 0.5
-        e_open_threshold = 0.9
+        c_open_threshold = 0.6
+        d_open_threshold = 0.8
+        e_open_threshold = 1.0
         f_open_threshold = 1.2
 
         # Locking rules
@@ -50,8 +50,8 @@ class Lockbox(Scenario):
         # f locks e
         a_open_condition  = alg_and(greater_than(self.lock_b_p, b_open_threshold), greater_than(self.lock_c_p, c_open_threshold))
         b_open_condition  = greater_than(self.lock_d_p, d_open_threshold)
+        c_open_condition  = alg_and(greater_than(self.lock_d_p, b_open_threshold + 0.1),greater_than(self.lock_e_p, e_open_threshold))
         d_open_condition  = greater_than(self.lock_e_p, e_open_threshold - 0.1)
-        c_open_condition  = alg_and(b_open_condition, d_open_condition)
         e_open_condition  = greater_than(self.lock_f_p, f_open_threshold)
 
         self.recorded_terms = {'a_condition': a_open_condition.expr,
@@ -75,10 +75,10 @@ class Lockbox(Scenario):
                                 Constraint(-0.4, 0.4, self.lock_f_v))
 
         # Configuration space
-        self.km.add_constraint('lock_b_position', Constraint(-self.lock_b_p, 0.5  - self.lock_b_p, self.lock_b_p))
-        self.km.add_constraint('lock_c_position', Constraint(-self.lock_c_p, 0.3  - self.lock_c_p, self.lock_c_p))
-        self.km.add_constraint('lock_d_position', Constraint(-self.lock_d_p, 0.55 - self.lock_d_p, self.lock_d_p))
-        self.km.add_constraint('lock_e_position', Constraint(-self.lock_e_p, 1.0  - self.lock_e_p, self.lock_e_p))
+        self.km.add_constraint('lock_b_position', Constraint(-self.lock_b_p, 0.7  - self.lock_b_p, self.lock_b_p))
+        self.km.add_constraint('lock_c_position', Constraint(-self.lock_c_p, 0.8  - self.lock_c_p, self.lock_c_p))
+        self.km.add_constraint('lock_d_position', Constraint(-self.lock_d_p, 0.9 - self.lock_d_p, self.lock_d_p))
+        self.km.add_constraint('lock_e_position', Constraint(-self.lock_e_p, 1.1  - self.lock_e_p, self.lock_e_p))
 
 
 class LockboxOpeningGenerator(Lockbox):
@@ -115,6 +115,7 @@ class LockboxOpeningGenerator(Lockbox):
         super(LockboxOpeningGenerator, self).run(integration_step, max_iterations)
         self.value_recorder.set_grid(True)
         self.symbol_recorder.set_grid(True)
+        #self.symbol_recorder.set_ylabels(['locked', 'open'])
 
 
 def lock_explorer(km, state, goals, generated_constraints):
