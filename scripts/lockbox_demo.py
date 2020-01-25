@@ -14,6 +14,7 @@ from kineverse.type_sets               import symengine_types, symbolic_types
 from kineverse.visualization.plotting  import split_recorders, draw_recorders
 from kineverse.utils                   import res_pkg_path
 
+from pprint import pprint
 
 def sign(x):
     return -1 if x < 0 else (1 if x > 0 else 0)
@@ -36,19 +37,20 @@ class Lockbox(Scenario):
         self.lock_e_v = DiffSymbol(self.lock_e_p)
         self.lock_f_v = DiffSymbol(self.lock_f_p)
 
-        bc_open_threshold = 0.1
-        d_open_threshold  = 0.5
-        e_open_threshold  = 0.2
-        f_open_threshold  = 1.2
+        b_open_threshold = 0.4
+        c_open_threshold = 0.15
+        d_open_threshold = 0.5
+        e_open_threshold = 0.9
+        f_open_threshold = 1.2
 
         # Locking rules
         # b and c lock a
         # d locks b and c
         # e locks c and d
         # f locks e
-        a_open_condition  = alg_and(greater_than(self.lock_b_p, bc_open_threshold), greater_than(self.lock_c_p, bc_open_threshold))
+        a_open_condition  = alg_and(greater_than(self.lock_b_p, b_open_threshold), greater_than(self.lock_c_p, c_open_threshold))
         b_open_condition  = greater_than(self.lock_d_p, d_open_threshold)
-        d_open_condition  = greater_than(self.lock_e_p, e_open_threshold)
+        d_open_condition  = greater_than(self.lock_e_p, e_open_threshold - 0.1)
         c_open_condition  = alg_and(b_open_condition, d_open_condition)
         e_open_condition  = greater_than(self.lock_f_p, f_open_threshold)
 
@@ -73,10 +75,10 @@ class Lockbox(Scenario):
                                 Constraint(-0.4, 0.4, self.lock_f_v))
 
         # Configuration space
-        self.km.add_constraint('lock_b_position', Constraint(-self.lock_b_p, 0.15 - self.lock_b_p, self.lock_b_p))
-        self.km.add_constraint('lock_c_position', Constraint(-self.lock_c_p, 0.15 - self.lock_c_p, self.lock_c_p))
+        self.km.add_constraint('lock_b_position', Constraint(-self.lock_b_p, 0.5  - self.lock_b_p, self.lock_b_p))
+        self.km.add_constraint('lock_c_position', Constraint(-self.lock_c_p, 0.3  - self.lock_c_p, self.lock_c_p))
         self.km.add_constraint('lock_d_position', Constraint(-self.lock_d_p, 0.55 - self.lock_d_p, self.lock_d_p))
-        self.km.add_constraint('lock_e_position', Constraint(-self.lock_e_p, 0.25 - self.lock_e_p, self.lock_e_p))
+        self.km.add_constraint('lock_e_position', Constraint(-self.lock_e_p, 1.0  - self.lock_e_p, self.lock_e_p))
 
 
 class LockboxOpeningGenerator(Lockbox):
@@ -95,6 +97,7 @@ class LockboxOpeningGenerator(Lockbox):
                                                               1.2 - self.lock_a_p, 
                                                               1, 
                                                               self.lock_a_p)}, set())
+        print('\n'.join(['{}:\n {}'.format(k, str(c)) for k, c in self.soft_constraints.items()]))
         total_symbols = set()
         for c in self.soft_constraints.values():
             total_symbols.update(c.expr.free_symbols)
@@ -106,6 +109,12 @@ class LockboxOpeningGenerator(Lockbox):
                 self.controlled_values[str(c.expr)] = ControlledValue(c.lower, c.upper, c.expr, 0.001)
             else:
                 self.hard_constraints[n] = c
+
+
+    def run(self, integration_step=0.02, max_iterations=200):
+        super(LockboxOpeningGenerator, self).run(integration_step, max_iterations)
+        self.value_recorder.set_grid(True)
+        self.symbol_recorder.set_grid(True)
 
 
 def lock_explorer(km, state, goals, generated_constraints):
@@ -171,6 +180,6 @@ def lock_explorer(km, state, goals, generated_constraints):
 if __name__ == '__main__':
     scenario = LockboxOpeningGenerator()
 
-    scenario.run(0.09)
+    scenario.run(0.19)
 
     draw_recorders([scenario.value_recorder, scenario.symbol_recorder], 4.0/9.0, 8, 4).savefig(res_pkg_path('package://kineverse_experiment_world/test/plots/lockbox_opening.png'))
