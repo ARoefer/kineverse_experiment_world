@@ -54,7 +54,7 @@ class Lockbox(Scenario):
         c_open_condition  = alg_and(b_open_condition, d_open_condition)
         e_open_condition  = greater_than(self.lock_f_p, f_open_threshold)
 
-        self.recorded_terms = {'a_condition': a_open_condition.expr,
+        self.recorded_terms = {'$b \\succ 0.1 \\curlywedge c \\succ 0.1$': a_open_condition.expr,
                                'b_condition': b_open_condition.expr,
                                'c_condition': c_open_condition.expr,
                                'd_condition': d_open_condition.expr,
@@ -114,7 +114,13 @@ class LockboxOpeningGenerator(Lockbox):
     def run(self, integration_step=0.02, max_iterations=200):
         super(LockboxOpeningGenerator, self).run(integration_step, max_iterations)
         self.value_recorder.set_grid(True)
+        self.value_recorder.data   = {'${}$'.format(k[5]): d for k, d in self.value_recorder.data.items()}
+        self.value_recorder.colors = {'${}$'.format(k[5]): c for k, c in self.value_recorder.colors.items()}
+
+        #self.value_recorder.set_outside_legend('right')
         self.symbol_recorder.set_grid(True)
+        self.symbol_recorder.set_ylabels(['closed', 'open'])
+        #self.symbol_recorder.set_outside_legend('right')
 
 
 def lock_explorer(km, state, goals, generated_constraints):
@@ -182,4 +188,4 @@ if __name__ == '__main__':
 
     scenario.run(0.19)
 
-    draw_recorders([scenario.value_recorder, scenario.symbol_recorder], 4.0/9.0, 8, 4).savefig(res_pkg_path('package://kineverse_experiment_world/test/plots/lockbox_opening.png'))
+    draw_recorders([scenario.value_recorder, scenario.symbol_recorder], 4.0/9.0, 5, 3).savefig(res_pkg_path('package://kineverse_experiment_world/test/plots/lockbox_opening.png'))
