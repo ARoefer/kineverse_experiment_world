@@ -54,11 +54,18 @@ class Lockbox(Scenario):
         d_open_condition  = greater_than(self.lock_e_p, e_open_threshold - 0.1)
         e_open_condition  = greater_than(self.lock_f_p, f_open_threshold)
 
-        self.recorded_terms = {'a_condition': a_open_condition.expr,
-                               'b_condition': b_open_condition.expr,
-                               'c_condition': c_open_condition.expr,
-                               'd_condition': d_open_condition.expr,
-                               'e_condition': e_open_condition.expr}
+        self.lock_str_labels = [
+            'a open = $b \\succ {} \\curlywedge c \\succ {}$'.format(b_open_threshold, c_open_threshold),
+            'b open = $d \\succ {}$'.format(d_open_threshold),
+            'c open = $d \\succ {} \\curlywedge e \\succ {}$'.format(b_open_threshold + 0.1, e_open_threshold),
+            'd open = $e \\succ {}$'.format(e_open_threshold - 0.1),
+            'e open = $f \\succ {}$'.format(f_open_threshold)]
+
+        self.recorded_terms = dict(zip(self.lock_str_labels, [a_open_condition.expr,
+                                                              b_open_condition.expr,
+                                                              c_open_condition.expr,
+                                                              d_open_condition.expr,
+                                                              e_open_condition.expr]))
 
         # Velocity constraints
         self.km.add_constraint('lock_a_velocity', 
@@ -114,9 +121,14 @@ class LockboxOpeningGenerator(Lockbox):
     def run(self, integration_step=0.02, max_iterations=200):
         super(LockboxOpeningGenerator, self).run(integration_step, max_iterations)
         self.value_recorder.set_grid(True)
-        self.symbol_recorder.set_grid(True)
-        #self.symbol_recorder.set_ylabels(['locked', 'open'])
+        self.value_recorder.data   = {'${}$'.format(k[5]): d for k, d in self.value_recorder.data.items()}
+        self.value_recorder.colors = {'${}$'.format(k[5]): c for k, c in self.value_recorder.colors.items()}
+        # self.value_recorder.set_outside_legend('right')
 
+        # self.symbol_recorder.set_outside_legend('right')
+        self.symbol_recorder.colors = {k: self.value_recorder.colors[x] for k, x in zip(self.lock_str_labels, ['${}$'.format(x) for x in 'abcde'])}
+        self.symbol_recorder.set_grid(True)
+        self.symbol_recorder.set_ylabels(['locked', 'open'])
 
 def lock_explorer(km, state, goals, generated_constraints):
 
@@ -124,8 +136,8 @@ def lock_explorer(km, state, goals, generated_constraints):
     for n, goal in goals.items():
         symbols = goal.expr.free_symbols
         goal_sign = sign(subs(goal.lower, state)) + sign(subs(goal.upper, state))
-        if goal_sign == 0:
-            return goals
+        if goal_sign == 0:  # Constraint is satisfied
+            continue 
 
         goal_expr = goal.expr
         if type(goal_expr) != GC:
@@ -133,35 +145,33 @@ def lock_explorer(km, state, goals, generated_constraints):
         
         goal_expr.do_full_diff()
 
-        diff_symbols = set(goal_expr.gradients.keys())
-        diff_constraints = km.get_constraints_by_symbols(diff_symbols)
-
         diff_value = {s: subs(g, state) for s, g in goal_expr.gradients.items()}
         diff_sign  = {s: sign(g) * goal_sign for s, g in diff_value.items()}
+        
+        diff_symbols = set(diff_sign.keys())
+        diff_constraints = km.get_constraints_by_symbols(diff_symbols)
 
-        symbol_constraints = {}
+        # Constraints constraining the DoF listed by symbol
+        blocking_constraints = {s: {} for s in diff_symbols}
 
+        # Iterate over constraints which directly constrain a symbol -> type(c.expr) == Symbol
         for n, c in {n: c for n, c in diff_constraints.items() if c.expr in diff_symbols}.items():
-            if c.expr not in symbol_constraints:
-                symbol_constraints[c.expr] = {}
-            symbol_constraints[c.expr][n] = c
+            s = c.expr
+            c_upper = subs(c.upper, state)
+            c_lower = subs(c.lower, state)
+            sign_u  = sign(c_upper)
+            sign_l  = sign(c_lower)
+            
+            # Check if constraint is blocking the DoF from moving in the desired direction
+            if diff_sign[s] > 0 and sign_u <= 0:
+                blocking_constraints[s][n] = c
+            elif diff_sign[s] < 0 and sign_l >= 0:
+                blocking_constraints[s][n] = c
 
-        blocking_constraints = {}
-        for s, cd in symbol_constraints.items():
-            blocking_constraints[s] = {}
-            for n, c in cd.items():
-                c_upper = subs(c.upper, state)
-                c_lower = subs(c.lower, state)
-                sign_u = sign(c_upper)
-                sign_l = sign(c_lower)
-                if diff_sign[s] > 0 and sign_u <= 0:
-                    blocking_constraints[s][n] = c
-                elif diff_sign[s] < 0 and sign_l >= 0:
-                    blocking_constraints[s][n] = c
 
         new_goals = {}
         # If all symbols are blocked from going in the desired direction
-        if min([len(cd) for cd in blocking_constraints.values()]):
+        if min([len(cd) for cd in blocking_constraints.values()]) > 0:
             for s, cd in blocking_constraints.items():
                 for n, c in cd.items():
                     u_const_name = 'unlock {} upper bound'.format(n)
@@ -183,4 +193,5 @@ if __name__ == '__main__':
 
     scenario.run(0.19)
 
-    draw_recorders([scenario.value_recorder, scenario.symbol_recorder], 4.0/9.0, 8, 4).savefig(res_pkg_path('package://kineverse_experiment_world/test/plots/lockbox_opening.png'))
+    draw_recorders([scenario.value_recorder, scenario.symbol_recorder], 4.0/9.0, 8, 3).savefig(res_pkg_path('package://kineverse_experiment_world/test/plots/lockbox_opening.png'))
+
