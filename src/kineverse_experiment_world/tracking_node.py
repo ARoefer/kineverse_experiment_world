@@ -138,16 +138,7 @@ class TrackerNode(object):
                     self.joints |= model.pose.free_symbols
                     self.joint_aliases = {s: str(s) for s in self.joints}
 
-                    axis, angle = spw.axis_angle_from_matrix(rot_of(model.pose).T * rot_of(te.pose))
-                    r_rot_control = axis * angle
-
-                    hack = rotation3_axis_angle([0, 0, 1], 0.0001)
-
-                    axis, angle = spw.axis_angle_from_matrix((rot_of(model.pose).T * (rot_of(model.pose) * hack)).T)
-                    c_aa = (axis * angle)
-
-                    r_dist = norm(r_rot_control - c_aa)
-
+                    r_dist = norm(rot_of(model.pose) - rot_of(te.pose))
                     self.soft_constraints[align_rotation] = SC(-r_dist, -r_dist, 1, r_dist)
                 
                     dist = norm(pos_of(model.pose) - pos_of(te.pose))
