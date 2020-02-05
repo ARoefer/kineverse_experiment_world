@@ -28,12 +28,13 @@ from kineverse.msg                  import ValueMap         as ValueMapMsg
 TrackerEntry = namedtuple('TrackerEntry', ['pose', 'update_state', 'model_cb'])
 
 class TrackerNode(object):
-    def __init__(self, js_topic, obs_topic, integration_factor=0.05, iterations=30):
+    def __init__(self, js_topic, obs_topic, integration_factor=0.05, iterations=30, visualize=False, use_timer=True):
         self.km_client = ModelClient(None)
 
         self._js_msg = ValueMapMsg()
         self._integration_factor = integration_factor
         self._iterations = iterations
+        self._use_timer  = use_timer
 
         self.aliases = {}
         self.tracked_poses = {}
@@ -43,7 +44,7 @@ class TrackerNode(object):
         self.joints        = set()
         self.joint_aliases = {}
         
-        self.visualizer = ROSVisualizer('/tracker_vis', 'map')
+        self.visualizer = ROSVisualizer('/tracker_vis', 'map') if visualize else None
 
         self.pub_js  = rospy.Publisher(  js_topic, ValueMapMsg, queue_size=1)
         self.sub_obs = rospy.Subscriber(obs_topic,      PSAMsg, self.cb_process_obs, queue_size=5)
@@ -54,7 +55,7 @@ class TrackerNode(object):
             if type(model_path) is not str:
                 model_path = str(model_path)
 
-            start_tick = len(self.tracked_poses) == 0
+            start_tick = len(self.tracked_poses) == 0 and self._use_timer
 
             if model_path not in self.tracked_poses:
                 syms = [Position(Path(model_path) + (x,)) for x in ['ax', 'ay', 'az', 'x', 'y', 'z']]
@@ -133,17 +134,18 @@ class TrackerNode(object):
                 align_rotation = '{} align rotation'.format(str_path)
                 align_position = '{} align position'.format(str_path)
                 if model is not None:
-                    te = self.tracked_poses[str_path]
+                    if len(model.pose.free_symbols) > 0:
+                        te = self.tracked_poses[str_path]
 
-                    self.joints |= model.pose.free_symbols
-                    self.joint_aliases = {s: str(s) for s in self.joints}
+                        self.joints |= model.pose.free_symbols
+                        self.joint_aliases = {s: str(s) for s in self.joints}
 
-                    r_dist = norm(rot_of(model.pose) - rot_of(te.pose))
-                    self.soft_constraints[align_rotation] = SC(-r_dist, -r_dist, 1, r_dist)
-                
-                    dist = norm(pos_of(model.pose) - pos_of(te.pose))
-                    self.soft_constraints[align_position] = SC(-dist, -dist, 1, dist)
-                    self.generate_opt_problem()
+                        r_dist = norm(rot_of(model.pose) - rot_of(te.pose))
+                        self.soft_constraints[align_rotation] = SC(-r_dist, -r_dist, 1, r_dist)
+                    
+                        dist = norm(pos_of(model.pose) - pos_of(te.pose))
+                        self.soft_constraints[align_position] = SC(-dist, -dist, 1, dist)
+                        self.generate_opt_problem()
                 else:
                     regenerate_problem = False
                     if align_position in self.soft_constraints:

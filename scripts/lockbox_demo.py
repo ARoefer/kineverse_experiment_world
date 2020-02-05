@@ -123,12 +123,15 @@ class LockboxOpeningGenerator(Lockbox):
         self.value_recorder.set_grid(True)
         self.value_recorder.data   = {'${}$'.format(k[5]): d for k, d in self.value_recorder.data.items()}
         self.value_recorder.colors = {'${}$'.format(k[5]): c for k, c in self.value_recorder.colors.items()}
+        self.value_recorder.set_xlabels([])
         # self.value_recorder.set_outside_legend('right')
 
         # self.symbol_recorder.set_outside_legend('right')
         self.symbol_recorder.colors = {k: self.value_recorder.colors[x] for k, x in zip(self.lock_str_labels, ['${}$'.format(x) for x in 'abcde'])}
         self.symbol_recorder.set_grid(True)
+        self.symbol_recorder.title = ''
         self.symbol_recorder.set_ylabels(['locked', 'open'])
+        self.symbol_recorder.set_xtitle('Iteration')
 
 def lock_explorer(km, state, goals, generated_constraints):
 
@@ -194,4 +197,3 @@ if __name__ == '__main__':
     scenario.run(0.19)
 
     draw_recorders([scenario.value_recorder, scenario.symbol_recorder], 4.0/9.0, 8, 3).savefig(res_pkg_path('package://kineverse_experiment_world/test/plots/lockbox_opening.png'))
-
