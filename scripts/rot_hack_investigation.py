@@ -12,6 +12,10 @@ from kineverse.motion.integrator       import CommandIntegrator
 from kineverse.utils                   import res_pkg_path
 from kineverse.time_wrapper            import Time
 
+from kineverse_experiment_world.utils  import np_sphere_sampling, \
+                                              sphere_sampling,    \
+                                              random_rot_uniform, \
+
 OptResult = namedtuple('OptResult', ['error_9d', 'error_axa', 'x', 'y', 'z', 'n_steps', 'sec_per_it'])
 TotalResults = namedtuple('TotalResults', ['errors_9d', 'errors_axa', 'iterations'])
 
