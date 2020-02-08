@@ -14,6 +14,7 @@ from kineverse.gradients.gradient_math      import spw,\
                                                    Position
 from kineverse.gradients.diff_logic         import get_diff_symbol, erase_type
 from kineverse.model.paths                  import Path
+from kineverse.model.geometry_model         import GeometryModel
 from kineverse.motion.min_qp_builder        import SoftConstraint as SC,\
                                                    TypedQPBuilder as TQPB, \
                                                    generate_controlled_values
@@ -29,7 +30,7 @@ TrackerEntry = namedtuple('TrackerEntry', ['pose', 'update_state', 'model_cb'])
 
 class TrackerNode(object):
     def __init__(self, js_topic, obs_topic, integration_factor=0.05, iterations=30, visualize=False, use_timer=True):
-        self.km_client = ModelClient(None)
+        self.km_client = ModelClient(GeometryModel)
 
         self._js_msg = ValueMapMsg()
         self._integration_factor = integration_factor
