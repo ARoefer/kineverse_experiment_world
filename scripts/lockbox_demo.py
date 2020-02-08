@@ -161,10 +161,7 @@ class LockboxOpeningGenerator(Lockbox):
         self.value_recorder.set_legend_location('center right')
         self.value_recorder.set_xspace(-10, 220)
         self.value_recorder.set_xlabels([])
-        # self.value_recorder.set_outside_legend('right')
 
-
-        # self.symbol_recorder.set_outside_legend('right')
         self.symbol_recorder.title  = None
         self.symbol_recorder.colors = {k: self.value_recorder.colors[x] for k, x in zip(self.lock_str_labels, ['${}$'.format(x) for x in 'abcde'])}
         self.symbol_recorder.set_grid(True)
@@ -172,6 +169,7 @@ class LockboxOpeningGenerator(Lockbox):
         self.symbol_recorder.set_legend_location('center right')
         self.symbol_recorder.set_xtitle('Iterations')
         self.symbol_recorder.set_xspace(-10, 220)
+
 
 def lock_explorer(km, state, goals, generated_constraints):
 
