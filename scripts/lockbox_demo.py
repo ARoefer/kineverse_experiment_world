@@ -11,7 +11,7 @@ from kineverse.gradients.gradient_math        import subs,          \
                                                      subs,          \
                                                      GC
 from kineverse.type_sets               import symengine_types, symbolic_types
-from kineverse.visualization.plotting  import split_recorders, draw_recorders
+from kineverse.visualization.plotting  import split_recorders, draw_recorders, ValueRecorder, ColorGenerator
 from kineverse.utils                   import res_pkg_path
 
 from pprint import pprint
@@ -29,6 +29,13 @@ class Lockbox(Scenario):
         self.lock_d_p = Position('lock_d')
         self.lock_e_p = Position('lock_e')
         self.lock_f_p = Position('lock_f')
+        pos_symbols = {self.lock_a_p,
+                       self.lock_b_p,
+                       self.lock_c_p,
+                       self.lock_d_p,
+                       self.lock_e_p,
+                       self.lock_f_p}
+        self.pos_symbols_str = {str(s) for s in pos_symbols}
 
         self.lock_a_v = DiffSymbol(self.lock_a_p)
         self.lock_b_v = DiffSymbol(self.lock_b_p)
@@ -36,6 +43,14 @@ class Lockbox(Scenario):
         self.lock_d_v = DiffSymbol(self.lock_d_p)
         self.lock_e_v = DiffSymbol(self.lock_e_p)
         self.lock_f_v = DiffSymbol(self.lock_f_p)
+        vel_symbols = {self.lock_a_v, 
+                       self.lock_b_v, 
+                       self.lock_c_v, 
+                       self.lock_d_v, 
+                       self.lock_e_v, 
+                       self.lock_f_v}
+        self.vel_symbols_str = {str(s) for s in vel_symbols} 
+        self.int_rules = {s: s for s in vel_symbols}
 
         b_open_threshold = 0.4
         c_open_threshold = 0.6
@@ -97,7 +112,13 @@ class LockboxOpeningGenerator(Lockbox):
                             self.lock_c_p: 0,
                             self.lock_d_p: 0,
                             self.lock_e_p: 0,
-                            self.lock_f_p: 0}
+                            self.lock_f_p: 0, #} # ,
+                            self.lock_a_v: 0,
+                            self.lock_b_v: 0,
+                            self.lock_c_v: 0,
+                            self.lock_d_v: 0,
+                            self.lock_e_v: 0,
+                            self.lock_f_v: 0}
 
         self.soft_constraints = lock_explorer(self.km, self.start_state, 
                                     {'open_a': SoftConstraint(1.2 - self.lock_a_p, 
@@ -120,15 +141,37 @@ class LockboxOpeningGenerator(Lockbox):
 
     def run(self, integration_step=0.02, max_iterations=200):
         super(LockboxOpeningGenerator, self).run(integration_step, max_iterations)
+        col_gen  = ColorGenerator()
+        colors   = {x: col_gen.get_color_hex() for x in 'abcdef'}
+        pos_data = {k[5]: d for k, d in self.value_recorder.data.items() if k in self.pos_symbols_str}
+        vel_data = {k[5]: d for k, d in self.value_recorder.data.items() if k in self.vel_symbols_str}
+
+        self.vel_recorder = ValueRecorder(None, *[('$\\dot{}{}{}$'.format('{', k, '}'), c) for k, c in colors.items()])
+        self.vel_recorder.data = {'$\\dot{}{}{}$'.format('{', k, '}'): d for k, d in vel_data.items()}
+        self.vel_recorder.set_grid(True)
+        self.vel_recorder.compute_limits()
+        self.vel_recorder.set_legend_location('center right')
+        self.vel_recorder.set_xspace(-10, 220)
+        self.vel_recorder.set_xlabels([])
+
+        self.value_recorder.title = 'Lockbox - Generated Opening'
         self.value_recorder.set_grid(True)
-        self.value_recorder.data   = {'${}$'.format(k[5]): d for k, d in self.value_recorder.data.items()}
-        self.value_recorder.colors = {'${}$'.format(k[5]): c for k, c in self.value_recorder.colors.items()}
+        self.value_recorder.data   = {'${}$'.format(k): d for k, d in pos_data.items()}
+        self.value_recorder.colors = {'${}$'.format(k): c for k, c in colors.items()}
+        self.value_recorder.set_legend_location('center right')
+        self.value_recorder.set_xspace(-10, 220)
+        self.value_recorder.set_xlabels([])
         # self.value_recorder.set_outside_legend('right')
 
+
         # self.symbol_recorder.set_outside_legend('right')
+        self.symbol_recorder.title  = None
         self.symbol_recorder.colors = {k: self.value_recorder.colors[x] for k, x in zip(self.lock_str_labels, ['${}$'.format(x) for x in 'abcde'])}
         self.symbol_recorder.set_grid(True)
         self.symbol_recorder.set_ylabels(['locked', 'open'])
+        self.symbol_recorder.set_legend_location('center right')
+        self.symbol_recorder.set_xtitle('Iterations')
+        self.symbol_recorder.set_xspace(-10, 220)
 
 def lock_explorer(km, state, goals, generated_constraints):
 
@@ -193,5 +236,4 @@ if __name__ == '__main__':
 
     scenario.run(0.19)
 
-    draw_recorders([scenario.value_recorder, scenario.symbol_recorder], 4.0/9.0, 8, 3).savefig(res_pkg_path('package://kineverse_experiment_world/test/plots/lockbox_opening.png'))
-
+    draw_recorders([scenario.value_recorder, scenario.vel_recorder, scenario.symbol_recorder], 4.0/9.0, 10, 3).savefig(res_pkg_path('package://kineverse_experiment_world/test/plots/lockbox_opening.png'))
