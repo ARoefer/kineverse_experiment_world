@@ -70,7 +70,7 @@ if __name__ == '__main__':
     #sim.register_plugin(JSPublisher(fetch, 'fetch'))
     sim.register_plugin(OdometryPublisher(sim, fetch))
     sim.register_plugin(JointVelocityController(fetch, 'fetch'))
-    sim.register_plugin(PoseObservationPublisher(fetch, 'head_camera_link', 0.942478, 0.4, 6.0, 0.01))
+    sim.register_plugin(PoseObservationPublisher(fetch, 'head_camera_link', 0.942478, 0.4, 6.0, 0.03, debug=True)) # 0.065
 
     node.run()
 

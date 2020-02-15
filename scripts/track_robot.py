@@ -11,7 +11,7 @@ from geometry_msgs.msg import PoseStamped as PoseStampedMsg
 
 if __name__ == '__main__':
     rospy.init_node('kineverse_tracking_node')
-    tracker = TrackerNode('/tracked/state', '/pose_obs', 1, 3)
+    tracker = TrackerNode('/tracked/state', '/pose_obs', 1, 3, visualize=True)
 
     tracker.track('/iai_oven_area/links/sink_area_dish_washer_door', 'iai_kitchen/sink_area_dish_washer_door')
     tracker.track('/iai_oven_area/links/sink_area_left_upper_drawer_main', 'iai_kitchen/sink_area_left_upper_drawer_main')

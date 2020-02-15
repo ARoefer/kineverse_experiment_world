@@ -141,7 +141,7 @@ if __name__ == '__main__':
     columns = ['Linear SD', 'Angular SD', 'Mean Error', 'SD Error', 'Min Error', 'Max Error', 'Mean Iterations', 'Iteration Duration']
     df_results = pd.DataFrame(columns=columns)
 
-    for linear_std, angular_std in zip(np.linspace(0, 0.15, 5), np.linspace(0, 10 * (np.pi / 180.0), 5)):
+    for linear_std, angular_std in zip(np.linspace(0, 0.15, 5), np.linspace(0, 0)): # 10 * (np.pi / 180.0), 5)):
         n_samples   = 200
         for x in range(n_samples):
             # Uniformly sample a joint state
@@ -198,7 +198,6 @@ if __name__ == '__main__':
                 tracker.cb_tick(None)
 
                 # visualizer.begin_draw_cycle('noise')            
-                # visualizer.render('noise')
                 # visualizer.begin_draw_cycle('solved')
 
                 # for k, o in world.named_objects.items():
@@ -207,7 +206,7 @@ if __name__ == '__main__':
                 #         o.transform = tf
                 #         visualizer.draw_collision_object('solved', o, r=0, g=0.2, b=1)
 
-                # visualizer.render('solved')
+                # visualizer.render()
                 # _ = raw_input('Press enter to continue')
                 # exit(0)
 
@@ -243,4 +242,4 @@ if __name__ == '__main__':
                 np.max(np.mean(config_delta, 1)),
                 n_crashes))
 
-    df_results.to_csv('tracker_results.csv', float_format='%.5f', index=False)
+    df_results.to_csv('tracker_results_no_ang_noise.csv', float_format='%.5f', index=False)

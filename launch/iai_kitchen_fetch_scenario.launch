@@ -12,7 +12,7 @@
     <group if="$(arg use_tracker)">
         <node pkg="kineverse" type="model_tf_publisher.py" name="kitchen_tracking_result" output="screen" >
             <param name="model_path" value="iai_oven_area"/>
-            <param name="robot_description" value="/iai_kitchen/robot_description"/>
+            <param name="robot_description" value="/tracked_kitchen/robot_description"/>
             <param name="state_topic"       value="/tracked/state"/>
         </node>
     </group>

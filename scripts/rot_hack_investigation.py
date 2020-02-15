@@ -19,30 +19,6 @@ from kineverse_experiment_world.utils  import np_sphere_sampling, \
 OptResult = namedtuple('OptResult', ['error_9d', 'error_axa', 'x', 'y', 'z', 'n_steps', 'sec_per_it'])
 TotalResults = namedtuple('TotalResults', ['errors_9d', 'errors_axa', 'iterations'])
 
-# Uniform sampling of points on a sphere according to:
-#  https://demonstrations.wolfram.com/RandomPointsOnASphere/
-def np_sphere_sampling(n_points):
-    r_theta = np.random.rand(n_points, 1) * np.pi
-    r_u     = np.random.rand(n_points, 1)
-    factor  = np.sqrt(1.0 - r_u**2)
-    coords  = np.hstack((np.cos(r_theta) * factor, np.sin(r_theta) * factor, r_u))
-    return coords # 
-
-def sphere_sampling(n_points):
-    return [vector3(*row) for row in np_sphere_sampling(n_rots)]
-
-def random_rot_uniform(n_rots):
-    # Random rotation angles about the z axis
-    r_theta = np.random.rand(n_rots, 1)
-
-    r_z_points = np_sphere_sampling(n_rots)
-    x_angles   = np.arccos(r_z_points[:, 2]).reshape((n_rots, 1))
-    z_angles   = np.arctan2(r_z_points[:, 1], r_z_points[:, 0]).reshape((n_rots, 1))
-    print(r_theta.shape, x_angles.shape, z_angles.shape)
-    return [rotation3_axis_angle([0,0,1], r_z) * 
-            rotation3_axis_angle([1,0,0], r_x) * 
-            rotation3_axis_angle([0,0,1], r_t) for r_t, r_x, r_z in np.hstack((r_theta, x_angles, z_angles))]
-
 def rot_goal_non_hack(r_ctrl, r_goal):
     axis, angle   = axis_angle_from_matrix(rot_of(r_ctrl).T * rot_of(r_goal))
     r_rot_control = axis * angle

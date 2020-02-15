@@ -2,15 +2,18 @@ import rospy
 import numpy as np
 import giskardpy.symengine_wrappers as spw
 
-from iai_bullet_sim.basic_simulator import SimulatorPlugin
-from iai_bullet_sim.multibody       import MultiBody
+from iai_bullet_sim.basic_simulator         import SimulatorPlugin
+from iai_bullet_sim.multibody               import MultiBody
+from kineverse_experiment_world.utils       import np_random_normal_offset, np_random_quat_normal
+from kineverse.visualization.ros_visualizer import ROSVisualizer
+from kineverse.bpb_wrapper                  import pb, transform_to_matrix
 
 from kineverse_experiment_world.msg import PoseStampedArray as PSAMsg
-from kineverse.visualization.ros_visualizer import ROSVisualizer
-from geometry_msgs.msg import PoseStamped as PoseStampedMsg
+from geometry_msgs.msg              import PoseStamped as PoseStampedMsg
+
 
 class PoseObservationPublisher(SimulatorPlugin):
-    def __init__(self, multibody, camera_link, fov, near, far, noise_exp, topic_prefix=''):
+    def __init__(self, multibody, camera_link, fov, near, far, noise_exp, topic_prefix='', frequency=30, debug=False):
         super(PoseObservationPublisher, self).__init__('PoseObservationPublisher')
         self.topic_prefix = topic_prefix
         self.publisher = rospy.Publisher('{}/pose_obs'.format(topic_prefix), PSAMsg, queue_size=1, tcp_nodelay=True)
@@ -22,7 +25,9 @@ class PoseObservationPublisher(SimulatorPlugin):
         self.far         = far
         self.noise_exp   = noise_exp
         self._enabled    = True
-        self.visualizer  = ROSVisualizer('pose_obs_viz', 'map')
+        self.visualizer  = ROSVisualizer('pose_obs_viz', 'map') if debug else None
+        self._last_update = 1000
+        self._update_wait = 1.0 / frequency
 
 
     def post_physics_update(self, simulator, deltaT):
@@ -33,59 +38,67 @@ class PoseObservationPublisher(SimulatorPlugin):
         if not self._enabled:
             return
 
-        cf_tuple = self.multibody.get_link_state(self.camera_link).worldFrame
-        camera_frame = spw.frame3_quaternion(cf_tuple.position.x, cf_tuple.position.y, cf_tuple.position.z, *cf_tuple.quaternion)
-        cov_proj = spw.rot_of(camera_frame)[:3, :3]
-        inv_cov_proj = cov_proj.T
+        self._last_update += deltaT
+        if self._last_update >= self._update_wait:
+            self._last_update = 0
+            cf_tuple = self.multibody.get_link_state(self.camera_link).worldFrame
+            camera_frame = spw.frame3_quaternion(cf_tuple.position.x, cf_tuple.position.y, cf_tuple.position.z, *cf_tuple.quaternion)
+            cov_proj = spw.rot_of(camera_frame)[:3, :3]
+            inv_cov_proj = cov_proj.T
 
-        out = PSAMsg()
+            out = PSAMsg()
 
-        self.visualizer.begin_draw_cycle()
-        points = []
+            if self.visualizer is not None:
+                self.visualizer.begin_draw_cycle()
+                poses = []
 
-        for name, body in simulator.bodies.items():
-            if body == self.multibody:
-                continue
+            for name, body in simulator.bodies.items():
+                if body == self.multibody:
+                    continue
 
-            if isinstance(body, MultiBody):
-                poses_to_process = [('{}/{}'.format(name, l), body.get_link_state(l).worldFrame) for l in body.links]
-            else:
-                poses_to_process = [(name, body.pose())]
-
-            for pname, pose in poses_to_process:
-                if not pname in self.message_templates:
-                    msg = PoseStampedMsg()
-                    msg.header.frame_id = pname
-                    self.message_templates[pname] = msg
+                if isinstance(body, MultiBody):
+                    poses_to_process = [('{}/{}'.format(name, l), body.get_link_state(l).worldFrame) for l in body.links]
                 else:
-                    msg = self.message_templates[pname]
+                    poses_to_process = [(name, body.pose())]
 
-                obj_pos = spw.point3(*pose.position)
-                c2o  = obj_pos - spw.pos_of(camera_frame)
-                dist = spw.norm(c2o)
-                if dist < self.far and dist > self.near and spw.dot(c2o, spw.x_of(camera_frame)) > spw.cos(self.fov * 0.5) * dist:
+                for pname, pose in poses_to_process:
+                    if not pname in self.message_templates:
+                        msg = PoseStampedMsg()
+                        msg.header.frame_id = pname
+                        self.message_templates[pname] = msg
+                    else:
+                        msg = self.message_templates[pname]
 
-
-                    noise = 2 ** (self.noise_exp * dist) - 1
-
-                    noisy_pos = spw.point3(np.random.normal(pose.position[0], noise),
-                                           np.random.normal(pose.position[1], noise),
-                                           np.random.normal(pose.position[2], noise))
-
-                    points.append(noisy_pos)
-                    msg.pose.position.x = noisy_pos[0]
-                    msg.pose.position.y = noisy_pos[1]
-                    msg.pose.position.z = noisy_pos[2]
-                    msg.pose.orientation.x = pose.quaternion[0]
-                    msg.pose.orientation.y = pose.quaternion[1]
-                    msg.pose.orientation.z = pose.quaternion[2]
-                    msg.pose.orientation.w = pose.quaternion[3]
-                    out.poses.append(msg)
+                    obj_pos = spw.point3(*pose.position)
+                    c2o  = obj_pos - spw.pos_of(camera_frame)
+                    dist = spw.norm(c2o)
+                    if dist < self.far and dist > self.near and spw.dot(c2o, spw.x_of(camera_frame)) > spw.cos(self.fov * 0.5) * dist:
 
 
-            self.publisher.publish(out)
-        self.visualizer.draw_points('debug', spw.eye(4), 0.1, points)
-        self.visualizer.render()
+                        noise = 2 ** (self.noise_exp * dist) - 1
+                        (n_quat, )  = np_random_quat_normal(1, 0, noise)
+                        (n_trans, ) = np_random_normal_offset(1, 0, noise)
+
+                        n_pose = pb.Transform(pb.Quaternion(*pose.quaternion), pb.Vector3(*pose.position)) *\
+                                     pb.Transform(pb.Quaternion(*n_quat), pb.Vector3(*n_trans[:3]))
+
+                        if self.visualizer is not None:
+                            poses.append(transform_to_matrix(n_pose))
+                        msg.pose.position.x = n_pose.origin.x
+                        msg.pose.position.y = n_pose.origin.y
+                        msg.pose.position.z = n_pose.origin.z
+                        msg.pose.orientation.x = n_pose.rotation.x
+                        msg.pose.orientation.y = n_pose.rotation.y
+                        msg.pose.orientation.z = n_pose.rotation.z
+                        msg.pose.orientation.w = n_pose.rotation.w
+                        out.poses.append(msg)
+
+
+                self.publisher.publish(out)
+
+            if self.visualizer is not None:
+                self.visualizer.draw_poses('debug', spw.eye(4), 0.1, 0.02, poses)
+                self.visualizer.render()
 
 
 
