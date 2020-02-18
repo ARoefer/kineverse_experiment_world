@@ -1,0 +1,6 @@
+<launch>
+    <arg name="static_base" default="false"/>
+
+    <node pkg="kineverse" type="upload_omnibase_robot.py" args="package://iai_pr2_description/robots/pr2_calibrated_with_ft2.xml" name="fetch_uploader" output="screen" unless="$(arg static_base)"/>
+    <node pkg="kineverse" type="upload_urdf.py" args="package://iai_pr2_description/robots/pr2_calibrated_with_ft2.xml" name="fetch_uploader" output="screen" if="$(arg static_base)"/>
+</launch>

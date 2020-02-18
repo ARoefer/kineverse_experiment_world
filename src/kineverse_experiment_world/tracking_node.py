@@ -127,7 +127,7 @@ class TrackerNode(object):
 
     @profile
     def cb_process_obs(self, poses_msg):
-        print('Got new observation')
+        # print('Got new observation')
         with self.lock:
             for pose_msg in poses_msg.poses:
                 if pose_msg.header.frame_id in self.aliases and self.integrator is not None:

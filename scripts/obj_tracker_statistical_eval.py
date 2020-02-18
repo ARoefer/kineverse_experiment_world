@@ -141,7 +141,7 @@ if __name__ == '__main__':
     columns = ['Linear SD', 'Angular SD', 'Mean Error', 'SD Error', 'Min Error', 'Max Error', 'Mean Iterations', 'Iteration Duration']
     df_results = pd.DataFrame(columns=columns)
 
-    for linear_std, angular_std in zip(np.linspace(0, 0.15, 5), np.linspace(0, 0)): # 10 * (np.pi / 180.0), 5)):
+    for linear_std, angular_std in zip(np.linspace(0, 0.15, 5), np.linspace(10 * (np.pi / 180.0), 5)):
         n_samples   = 200
         for x in range(n_samples):
             # Uniformly sample a joint state
