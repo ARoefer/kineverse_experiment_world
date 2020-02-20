@@ -25,6 +25,7 @@ from kineverse_experiment_world.push_demo_base import generate_push_closing
 
 from nav_msgs.msg    import Odometry   as OdometryMsg
 from sensor_msgs.msg import JointState as JointStateMsg
+from kineverse.msg   import ValueMap   as ValueMapMsg
 
 goal_joints = {'prismatic', 'revolute'}
 
@@ -62,12 +63,15 @@ class ObsessiveObjectCloser(object):
         self.urdf_path = urdf_path
         self.obj = None
 
+        self._poi_pos = Position('poi')
+        self.poi = point3(1.5, 0.5, 0.0) + vector3(0, self._poi_pos * 2.0, 0)
+
         self.km.register_on_model_changed(self.robot_path, self.cb_robot_model_changed)
         self.km.register_on_model_changed(self.urdf_path,  self.cb_obj_model_changed)
 
         self.pub_cmd = rospy.Publisher('{}/commands/joint_velocities'.format(robot_topic_prefix), JointStateMsg, queue_size=1)
 
-        self.sub_obj_js   = rospy.Subscriber(obj_js_topic, JointStateMsg, self.cb_obj_joint_state,  queue_size=1)
+        self.sub_obj_js   = rospy.Subscriber(obj_js_topic, ValueMapMsg, self.cb_obj_joint_state,  queue_size=1)
         self.sub_odom     = rospy.Subscriber('{}/odometry'.format(robot_topic_prefix), OdometryMsg, self.cb_robot_odometry, queue_size=1)
         self.sub_robot_js = rospy.Subscriber('{}/joint_states'.format(robot_topic_prefix), JointStateMsg, self.cb_robot_joint_state, queue_size=1)
 
@@ -140,9 +144,13 @@ class ObsessiveObjectCloser(object):
         if self.obj_js_aliases is None:
             return
 
-        for name, p in zip(state_msg.name, state_msg.position):
-            if name in self.obj_js_aliases:
-                self.state[self.obj_js_aliases[name]] = p
+        if type(state_msg) == JointStateMsg:
+            for name, p in zip(state_msg.name, state_msg.position):
+                if name in self.obj_js_aliases:
+                    self.state[self.obj_js_aliases[name]] = p
+        else:
+            for name, p in zip(state_msg.symbol, state_msg.value):
+                self.state[Symbol(name)] = p
 
         self.obj_world.update_world(self.state)
 
@@ -150,7 +158,7 @@ class ObsessiveObjectCloser(object):
             if self._current_target is None:
                 for p, s in self.possible_targets:
                     position = self.state[s]
-                    if position > 0.01:
+                    if position > 0.02:
                         print('ARGH, {} is open!'.format(p))
                         self._current_target = p
                         self.generate_push_controller()
@@ -161,7 +169,7 @@ class ObsessiveObjectCloser(object):
                     self.generate_idle_controller()
 
             else:
-                if self.state[self.target_symbol_map[self._current_target]] <= 0.01:
+                if self.state[self.target_symbol_map[self._current_target]] < 0.02:
                     print('{} is finally closed again.'.format(self._current_target))
                     self._current_target = None
 
@@ -174,6 +182,7 @@ class ObsessiveObjectCloser(object):
         now = Time.now()
         dt  = (now - self._t_last_update).to_sec()
         self._t_last_update = now
+        self.state[self._poi_pos] = cos(now.to_sec())
 
         if self.robot_js_aliases is None:
             return
@@ -239,6 +248,10 @@ class ObsessiveObjectCloser(object):
 
         tucking_constraints.update(self.taxi_constraints)
 
+        cam_to_poi = self.poi - pos_of(self.robot_camera.pose)
+        lookat_dot = 1 - dot(self.robot_camera.pose * vector3(1,0,0), cam_to_poi) / norm(cam_to_poi)
+        tucking_constraints['sweeping gaze'] = SC(-lookat_dot * 5, -lookat_dot * 5, 1, lookat_dot)
+
         symbols = set()
         for c in tucking_constraints.values():
             symbols |= c.expr.free_symbols
@@ -283,7 +296,7 @@ class ObsessiveObjectCloser(object):
                                                                                         obj_pose,
                                                                                         self.robot_eef_path,
                                                                                         self._current_target,
-                                                                                        'cross',
+                                                                                        'linear', # 'cross',
                                                                                         BULLET_FIXED_OFFSET)
         controlled_values, hard_constraints = generate_controlled_values(hard_constraints, controlled_symbols)
         controlled_values = depth_weight_controlled_values(self.km, controlled_values, exp_factor=1.1)
@@ -294,7 +307,7 @@ class ObsessiveObjectCloser(object):
         lookat_dot = 1 - dot(self.robot_camera.pose * vector3(1,0,0), cam_to_obj) / norm(cam_to_obj)
 
         soft_constraints = {'reach {}'.format(self._current_target): PIDC(geom_distance, geom_distance, 1, k_i=0.02),
-                            'close {}'.format(self._current_target): PIDC(target_symbol, target_symbol, 1, k_i=0.0),
+                            'close {}'.format(self._current_target): PIDC(target_symbol, target_symbol, 1, k_i=0.06),
                             'lookat {}'.format(self._current_target): SC(-lookat_dot, -lookat_dot, 1, lookat_dot)}
         self.soft_constraints = soft_constraints
 

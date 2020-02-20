@@ -4,6 +4,7 @@ import rospy
 import random
 import subprocess
 import tf
+import numpy as np
 
 from pprint import pprint
 
@@ -68,10 +69,10 @@ arm_poses  = {'l_elbow_flex_joint' : -2.1213,
               'r_wrist_flex_joint' : -1.05,
               'torso_lift_joint'   : 0.16825}
 
-robot = 'pr2'
-# robot = 'fetch'
+# robot = 'pr2'
+robot = 'fetch'
 
-use_omni =  True
+use_omni =  False
 # use_geom_circulation = None
 # use_geom_circulation = 'linear'
 # use_geom_circulation = 'cubic'
@@ -172,6 +173,8 @@ if __name__ == '__main__':
     else:
         robot_controlled_symbols |= {get_diff(x) for x in [base_joint.x_pos, base_joint.y_pos, base_joint.a_pos]}
     
+    n_iter    = []
+    total_dur = []
 
     for part in parts:
         kitchen_path = Path('kitchen/links/{}/pose'.format(part))
@@ -211,7 +214,8 @@ if __name__ == '__main__':
         else:
           start_state.update({Position(Path(robot) + (k,)): v  for k, v in tucked_arm.items()})
 
-        qpb = GQPB(coll_world, constraints, goal_constraints, controlled_values, visualizer=visualizer)
+        qpb = GQPB(coll_world, constraints, goal_constraints, controlled_values) #, visualizer=visualizer)
+        print(len(qpb.cv))
         qpb._cb_draw = debug_draw
         integrator = CommandIntegrator(qpb,
         #integrator = CommandIntegrator(TQPB(constraints, goal_constraints, controlled_values),
@@ -230,7 +234,10 @@ if __name__ == '__main__':
         int_factor = 0.1
         integrator.restart('{} Cartesian Goal Example'.format(robot))
         try:
+            start = Time.now()
             integrator.run(int_factor, 500)
+            total_dur.append((Time.now() - start).to_sec())
+            n_iter.append(integrator.current_iteration + 1)
         except Exception as e:
             print(e)
 
@@ -249,3 +256,7 @@ if __name__ == '__main__':
           break
 
     traj_vis.shutdown()
+
+    print('Mean Iter: {}\nMean Iter D: {}\nIter D SD: {}'.format(np.mean(n_iter), 
+                                                                 np.mean([d / float(i) for d, i in zip(total_dur, n_iter)]),
+                                                                 np.std([d / float(i) for d, i in zip(total_dur, n_iter)])))

@@ -21,7 +21,9 @@ from kineverse.utils     import res_pkg_path
 if __name__ == '__main__':
     rospy.init_node('kineverse_bullet_sim')
 
-    robot_str = [x for x in sys.argv[1:] if ':=' not in x][0] if len([x for x in sys.argv[1:] if ':=' not in x]) > 0 else 'fetch'
+    filtered_args = [x for x in sys.argv[1:] if ':=' not in x]
+    robot_str   = filtered_args[0] if len(filtered_args) > 0 else 'fetch'
+    use_tracker = bool(filtered_args[1]) if len(filtered_args) > 1 else False
 
     node = FixedTickSimulator(FullStatePublishingNode)
     node.init(mode='gui')
@@ -89,7 +91,7 @@ if __name__ == '__main__':
     #sim.register_plugin(JSPublisher(fetch, 'fetch'))
     sim.register_plugin(OdometryPublisher(sim, robot))
     sim.register_plugin(JointVelocityController(robot, robot_str))
-    sim.register_plugin(PoseObservationPublisher(robot, camera_link, 0.942478, 0.4, 6.0, 0.03, debug=True)) # 0.065
+    sim.register_plugin(PoseObservationPublisher(robot, camera_link, 0.942478, 0.4, 6.0, 0.0, debug=True)) # 0.065
 
     node.run()
 
