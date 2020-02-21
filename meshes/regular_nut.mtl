@@ -1,0 +1,12 @@
+# Blender MTL File: 'kinematics.blend'
+# Material Count: 1
+
+newmtl Material.001
+Ns 743.801648
+Ka 1.000000 1.000000 1.000000
+Kd 0.799103 0.194618 0.004391
+Ks 0.500000 0.500000 0.500000
+Ke 0.0 0.0 0.0
+Ni 1.450000
+d 1.000000
+illum 2
