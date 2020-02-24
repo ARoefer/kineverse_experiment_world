@@ -153,6 +153,7 @@ class LockboxOpeningGenerator(Lockbox):
         self.vel_recorder.set_legend_location('center right')
         self.vel_recorder.set_xspace(-10, 220)
         self.vel_recorder.set_xlabels([])
+        self.vel_recorder.set_ytitle('Velocity $\\dot{q}$')
 
         self.value_recorder.title = 'Lockbox - Generated Opening'
         self.value_recorder.set_grid(True)
@@ -161,6 +162,7 @@ class LockboxOpeningGenerator(Lockbox):
         self.value_recorder.set_legend_location('center right')
         self.value_recorder.set_xspace(-10, 220)
         self.value_recorder.set_xlabels([])
+        self.value_recorder.set_ytitle('Position $q$')
 
         self.symbol_recorder.title  = None
         self.symbol_recorder.colors = {k: self.value_recorder.colors[x] for k, x in zip(self.lock_str_labels, ['${}$'.format(x) for x in 'abcde'])}
