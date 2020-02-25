@@ -57,35 +57,35 @@ class TrackerNode(object):
 
 
     def track(self, model_path, alias):
-        with self.lock:
-            if type(model_path) is not str:
-                model_path = str(model_path)
+    # with self.lock:
+        if type(model_path) is not str:
+            model_path = str(model_path)
 
-            start_tick = len(self.tracked_poses) == 0 and self._use_timer
+        start_tick = len(self.tracked_poses) == 0 and self._use_timer
 
-            if model_path not in self.tracked_poses:
-                syms = [Position(Path(model_path) + (x,)) for x in ['x', 'y', 'z', 'qx', 'qy', 'qz', 'qw']]
-                def rf(msg, state):
-                    state[syms[0]] = msg.position.x
-                    state[syms[1]] = msg.position.y
-                    state[syms[2]] = msg.position.z
-                    state[syms[3]] = msg.orientation.x
-                    state[syms[4]] = msg.orientation.y
-                    state[syms[5]] = msg.orientation.z
-                    state[syms[6]] = msg.orientation.w
+        if model_path not in self.tracked_poses:
+            syms = [Position(Path(model_path) + (x,)) for x in ['x', 'y', 'z', 'qx', 'qy', 'qz', 'qw']]
+            def rf(msg, state):
+                state[syms[0]] = msg.position.x
+                state[syms[1]] = msg.position.y
+                state[syms[2]] = msg.position.z
+                state[syms[3]] = msg.orientation.x
+                state[syms[4]] = msg.orientation.y
+                state[syms[5]] = msg.orientation.z
+                state[syms[6]] = msg.orientation.w
 
-                def process_model_update(data):
-                    self._generate_pose_constraints(model_path, data)
+            def process_model_update(data):
+                self._generate_pose_constraints(model_path, data)
 
-                axis = vector3(*syms[:3])
-                self.aliases[alias]  = model_path 
-                self.tracked_poses[model_path] = TrackerEntry(frame3_quaternion(*syms), rf, process_model_update)
-                self._unintialized_poses.add(model_path)
+            axis = vector3(*syms[:3])
+            self.aliases[alias]  = model_path 
+            self.tracked_poses[model_path] = TrackerEntry(frame3_quaternion(*syms), rf, process_model_update)
+            self._unintialized_poses.add(model_path)
 
-                self.km_client.register_on_model_changed(Path(model_path), process_model_update)
+            self.km_client.register_on_model_changed(Path(model_path), process_model_update)
 
-            if start_tick:
-                self.timer = rospy.Timer(rospy.Duration(1.0 / 50), self.cb_tick)
+        if start_tick:
+            self.timer = rospy.Timer(rospy.Duration(1.0 / 50), self.cb_tick)
 
 
     def stop_tracking(self, model_path):

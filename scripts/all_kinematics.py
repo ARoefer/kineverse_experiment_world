@@ -9,6 +9,8 @@ from math import pi
 from time import time
 
 NULL_SYMBOL = Position('null_var')
+SYM_ROTATION = Position('rotation')
+
 
 def simple_kinematics(km, vis):
     # PRISMATIC
@@ -86,18 +88,40 @@ def simple_kinematics(km, vis):
     # parent_frame    = frame3_axis_angle(vector3(0,0,1), 0.56, point3(0,-5,0))
     # child_frame     = parent_frame * translation3(a, b, 0) * rotation3_axis_angle(vector3(0, 0, 1), c)
 
-    parent_frame = frame3_axis_angle(vector3(NULL_SYMBOL,0,1), 0.56, point3(0,-2,0))
-    wheel_frame  = parent_frame * rotation3_axis_angle(vector3(0,0,1), a)
-    pulley_frame = parent_frame * rotation3_axis_angle(vector3(0,0,1), a)
+    
+    parent_frame  = frame3_axis_angle(vector3(NULL_SYMBOL,0,1), 0.56, point3(0,-5,0))
+    rotator_frame = parent_frame  * rotation3_axis_angle(vector3(1,0,0), SYM_ROTATION)
+    rod_frame     = rotator_frame * frame3_axis_angle(vector3(1,0,0), -asin(sin(SYM_ROTATION) * 0.05 / 0.15) - SYM_ROTATION, point3(0, 0, 0.05))
+    # frame3_axis_angle(vector3(1,0,0), asin((-sin(SYM_ROTATION) * 0.05 / 0.15)), rotator_frame * point3(0, 0, 0.05))
+    piston_frame  =  rod_frame * frame3_axis_angle(vector3(1,0,0), asin(sin(SYM_ROTATION) * 0.05 / 0.15), point3(0,0,0.15)) # translation3(*(rod_frame * point3(0,0,0.15)))
 
-    wheel_geom   = Geometry('cylin_parent', rotation3_rpy(0, 0.5*pi, 0), 'cylinder', scale=vector3(0.1, 0.1, 1.0))
-    cylin_child  = Geometry('cylin_child', rotation3_rpy(0, 0.5*pi, 0), 'mesh', mesh='package://kineverse_experiment_world/meshes/weird_nut.obj')
-    parent_obj   = RigidBody('map', parent_frame, geometry={1: cylin_parent}, collision={1: cylin_parent})
-    child_obj    = RigidBody('cylin_parent', child_frame, geometry={1: cylin_child}, collision={1: cylin_child})    
+    rotator_geom = Geometry('rotator', spw.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/rotator.obj')
+    rod_geom     = Geometry('rod', spw.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/connecting_rod.obj')
+    piston_geom  = Geometry('piston', spw.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/piston.obj')
+    rotator_obj  = RigidBody('map', rotator_frame, geometry={1: rotator_geom}, collision={1: rotator_geom})
+    rod_obj      = RigidBody('rotator', rod_frame, geometry={1: rod_geom}, collision={1: rod_geom})
+    piston_obj   = RigidBody('piston', piston_frame, geometry={1: piston_geom}, collision={1: piston_geom})
 
-    km.set_data('cylin_parent', parent_obj)
-    km.set_data('cylin_child',  child_obj)
+    km.set_data('rotator', rotator_obj)
+    km.set_data('rod', rod_obj)
+    km.set_data('piston', piston_obj)
 
+
+    # Faucet
+    base_frame = frame3_axis_angle(vector3(NULL_SYMBOL,0,1), 0.56, point3(0,-6,0))
+    head_frame = base_frame * translation3(0, -0.006, 0.118) * rotation3_rpy(0.3 * (ay**2) - 0.3, 0, ay)
+
+    geom_head = Geometry('head', spw.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/faucet_handle.obj')
+    geom_base = Geometry('base', spw.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/faucet_base.obj')
+
+    rb_base   = RigidBody('map', base_frame, geometry={0: geom_base}, collision={0: geom_base})
+    rb_head   = RigidBody('map', head_frame, geometry={0: geom_head}, collision={0: geom_head})
+
+    water_flow = dot(y_of(head_frame), y_of(base_frame))
+    water_temperature = dot(y_of(head_frame), y_of(base_frame))
+
+    km.set_data('faucet_base', rb_base)
+    km.set_data('faucet_head', rb_head)
 
     km.clean_structure()
     km.dispatch_events()
@@ -121,6 +145,7 @@ if __name__ == '__main__':
         if now - last_update >= (1.0 / 50.0):
             state = {s: sin(time()) for s in symbols}
             state[NULL_SYMBOL] = 0
+            state[SYM_ROTATION] = now
 
             coll_world.update_world(state)
 

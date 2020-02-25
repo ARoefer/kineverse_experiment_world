@@ -104,7 +104,7 @@ if __name__ == '__main__':
 
     visualizer = ROSBPBVisualizer('/tracker_vis', 'map')
 
-
+    #raise Exception('{} update_rules\n  {}'.format(len(tracker.integrator.integration_rules), '\n  '.join(['{}: {}'.format(s, r) for s, r in tracker.integrator.integration_rules.items()])))
 
     constraints = tracker.km_client.get_constraints_by_symbols(tracker.joints)
 
@@ -141,7 +141,7 @@ if __name__ == '__main__':
     columns = ['Linear SD', 'Angular SD', 'Mean Error', 'SD Error', 'Min Error', 'Max Error', 'Mean Iterations', 'Iteration Duration']
     df_results = pd.DataFrame(columns=columns)
 
-    for linear_std, angular_std in zip(np.linspace(0, 0.15, 5), np.linspace(10 * (np.pi / 180.0), 5)):
+    for linear_std, angular_std in zip(np.linspace(0, 0.15, 5), np.linspace(0, 10 * (np.pi / 180.0), 5)):
         n_samples   = 200
         for x in range(n_samples):
             # Uniformly sample a joint state
@@ -242,4 +242,4 @@ if __name__ == '__main__':
                 np.max(np.mean(config_delta, 1)),
                 n_crashes))
 
-    df_results.to_csv('tracker_results_no_ang_noise.csv', float_format='%.5f', index=False)
+    df_results.to_csv('tracker_results.csv', float_format='%.5f', index=False)

@@ -94,7 +94,7 @@ if __name__ == '__main__':
     vis.begin_draw_cycle('paths')
     vis.draw_sphere('paths', goal, 0.02, r=0, b=1)
     vis.draw_strip('paths', spw.eye(4), 0.02, diff_p)
-    vis.draw_strip('paths', spw.eye(4), 0.02, md_p, r=0, g=1)
+    #vis.draw_strip('paths', spw.eye(4), 0.02, md_p, r=0, g=1)
     vis.render('paths')
 
     rospy.sleep(0.3)
