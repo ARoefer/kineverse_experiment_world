@@ -2,9 +2,11 @@
 import rospy
 import os
 import math
+import sys
 
 from iai_bullet_sim.realtime_simulator_node import FixedTickSimulator
 from iai_bullet_sim.ros_plugins             import JointVelocityController, ResetTrajectoryPositionController, JSPublisher, OdometryPublisher
+from iai_bullet_sim.multibody               import OmniBaseDriver
 from iai_bullet_sim.full_state_node         import FullStatePublishingNode
 from iai_bullet_sim.srv                     import AddURDFRequest, AddRigidObjectRequest
 from fetch_giskard.simulator_plugins        import FetchDriver
@@ -18,6 +20,10 @@ from kineverse.utils     import res_pkg_path
 
 if __name__ == '__main__':
     rospy.init_node('kineverse_bullet_sim')
+
+    filtered_args = [x for x in sys.argv[1:] if ':=' not in x]
+    robot_str   = filtered_args[0] if len(filtered_args) > 0 else 'fetch'
+    use_tracker = bool(filtered_args[1]) if len(filtered_args) > 1 else False
 
     node = FixedTickSimulator(FullStatePublishingNode)
     node.init(mode='gui')
@@ -50,27 +56,42 @@ if __name__ == '__main__':
 
     angle = math.pi * 0
 
-    req.urdf_path  = 'package://fetch_description/robots/fetch.urdf'
-    req.name       = 'fetch'
+    if robot_str == 'fetch':
+        req.urdf_path  = 'package://fetch_description/robots/fetch.urdf'
+    elif robot_str == 'pr2':
+        req.urdf_path  = 'package://iai_pr2_description/robots/pr2_calibrated_with_ft2.xml'
+    else:
+        raise Exception('Unknown robot {}'.format(robot_str))
+
+    req.name       = robot_str
     req.fixed_base = False
     req.pose.orientation.w = math.cos(angle * 0.5)
     req.pose.orientation.z = math.sin(angle * 0.5)
 
-    with open('test_fetch.urdf', 'w') as test:
+    with open('test_robot.urdf', 'w') as test:
         test.write(URDF.from_xml_file(res_pkg_path(req.urdf_path)).to_xml_string())
 
     node.srv_add_urdf(req) # Still reeeeeeally stupid!
 
     sim     = node.sim
     kitchen = sim.get_body('iai_kitchen')
-    fetch   = sim.get_body('fetch')
-    fetch.joint_driver = FetchDriver(1, 0.6, 'linear_joint', z_ang_joint='angular_joint')
+    robot   = sim.get_body(robot_str)
+    if robot_str == 'fetch':
+        robot.joint_driver = FetchDriver(1, 0.6, 'linear_joint', z_ang_joint='angular_joint')
+    else:
+        robot.joint_driver = OmniBaseDriver(1, 0.6, 'localization_x', 'localization_y', 'localization_a')
+        # pass
+
+    if robot_str == 'fetch':
+        camera_link = 'head_camera_link'
+    elif robot_str == 'pr2':
+        camera_link = 'head_mount_link'
 
     #sim.register_plugin(JSPublisher(kitchen, 'iai_kitchen'))
     #sim.register_plugin(JSPublisher(fetch, 'fetch'))
-    sim.register_plugin(OdometryPublisher(sim, fetch))
-    sim.register_plugin(JointVelocityController(fetch, 'fetch'))
-    sim.register_plugin(PoseObservationPublisher(fetch, 'head_camera_link', 0.942478, 0.4, 6.0, 0.03, debug=True)) # 0.065
+    sim.register_plugin(OdometryPublisher(sim, robot))
+    sim.register_plugin(JointVelocityController(robot, robot_str))
+    sim.register_plugin(PoseObservationPublisher(robot, camera_link, 0.942478, 0.4, 6.0, 0.0, debug=True)) # 0.065
 
     node.run()
 

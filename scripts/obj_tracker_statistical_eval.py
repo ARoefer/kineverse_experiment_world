@@ -115,7 +115,7 @@ if __name__ == '__main__':
 
         constraints = tracker.km_client.get_constraints_by_symbols(tracker.joints)
 
-        constraints = {c.expr: [subs(c.lower, {c.expr: 0}), subs(c.upper, {c.expr: 0})] for k, c in constraints.items() if type(c.expr) == Symbol and not is_symbolic(subs(c.lower, {c.expr: 0})) and not is_symbolic(subs(c.upper, {c.expr: 0}))}
+        constraints = {c.expr: [float(subs(c.lower, {c.expr: 0})), float(subs(c.upper, {c.expr: 0}))] for k, c in constraints.items() if type(c.expr) == Symbol and not is_symbolic(subs(c.lower, {c.expr: 0})) and not is_symbolic(subs(c.upper, {c.expr: 0}))}
 
         joint_array = [s for _, s in sorted([(str(s), s) for s in tracker.joints])]
         if len(joint_array) == last_n_dof:
@@ -133,8 +133,6 @@ if __name__ == '__main__':
         offset = bounds.T[0]
         scale  = bounds.T[1] - bounds.T[0]
 
-
-
         r_alias     = {p: a for a, p in tracker.aliases.items()}
         frames      = {a: tracker.km_client.get_data('{}/pose'.format(p)) for a, p in tracker.aliases.items()}
         true_frames = {p: tracker.km_client.get_data('{}/pose'.format(p)) for a, p in tracker.aliases.items()}
@@ -150,7 +148,7 @@ if __name__ == '__main__':
         n_crashes    = 0
 
 
-        for linear_std, angular_std in zip(np.linspace(0, 0.15, 5), np.linspace(10 * (np.pi / 180.0), 5)):
+        for linear_std, angular_std in zip(np.linspace(0, 0.15, 5), np.linspace(0, 10 * (np.pi / 180.0), 5)):
             n_samples   = 200
             for x in range(n_samples):
                 # Uniformly sample a joint state

@@ -15,21 +15,31 @@ if __name__ == '__main__':
 
     df = pd.read_csv(args[0])
 
-    rec_iter = ValueRecorder('Iterations', *df.columns[6:])
-    rec_iter.data = {df.columns[6]: df.T.iloc[6].to_list()}
-    rec_iter.data[df.columns[7]] = (df.T.iloc[7]*1000).to_list()
+    df_error = df[df.Poses == 60]
+
+    df_performance = pd.DataFrame([df[df.DoF == x].mean() for x in set(df['DoF'])])
+
+    iter_columns = ['Mean Iterations','Iteration Duration']
+    rec_iter = ValueRecorder('Iterations', *iter_columns)
+    rec_iter.data = {iter_columns[0]: df_performance[iter_columns[0]].to_list()}
+    rec_iter.data[iter_columns[1]] = (df_performance[iter_columns[1]]*1000).to_list()
     rec_iter.compute_limits()
     rec_iter.set_grid(True)
-    rec_iter.set_xspace(-0.1, 4.1)
+    # rec_iter.set_xspace(-0.1, df_performance['DoF'].max() + 0.1)
     rec_iter.set_ytitle('n iterations | ms')
+    rec_iter.set_xtitle('Degrees of Freedom')
+    rec_iter.set_xlabels([str(int(x)) for x in df_performance['DoF']])
 
-    rec_err = ValueRecorder('Error Evaluation', *df.columns[2:6])
-    rec_err.data = {df.columns[x]: df.T.iloc[x].to_list() for x in range(len(df.columns))[2:6]}
+    columns  = ['Mean Error', 'SD Error', 'Min Error', 'Max Error']
+    rec_err = ValueRecorder('Error Evaluation', *columns)
+    rec_err.data = {x: df_error[x].to_list() for x in columns}
     rec_err.compute_limits()
     rec_err.set_grid(True)
-    rec_err.set_xspace(-0.1, 4.1)
+    rec_err.set_xspace(-0.1, len(df_error) - 0.9)
+    rec_err.set_xlabels(['{:.3f} m linear $\\sigma$ \n{:.3f} rad angular $\\sigma$'.format(x, y) for x, y in zip(df_error['Linear SD'], df_error['Angular SD'])])
+    rec_err.set_marker('.')
 
-    rec_err.set_xlabels([]) # ['{:.3f} m linear $\\sigma$ \n{:.3f} rad angular $\\sigma$'.format(x, y) for x, y in df.iloc[:,:2].to_numpy()])
-    rec_iter.set_xlabels(['{:.3f} m linear $\\sigma$ \n{:.3f} rad angular $\\sigma$'.format(x, y) for x, y in df.iloc[:,:2].to_numpy()])
+    # rec_err.set_xlabels([]) # ['{:.3f} m linear $\\sigma$ \n{:.3f} rad angular $\\sigma$'.format(x, y) for x, y in df.iloc[:,:2].to_numpy()])
+    #rec_iter.set_xlabels(['{:.3f} m linear $\\sigma$ \n{:.3f} rad angular $\\sigma$'.format(x, y) for x, y in df.iloc[:,:2].to_numpy()])
 
     draw_recorders([rec_err, rec_iter], 1.0, 8, 3).savefig('{}.png'.format(args[0][:-4]))
