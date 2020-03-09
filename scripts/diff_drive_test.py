@@ -83,7 +83,7 @@ if __name__ == '__main__':
             break
 
 
-    vis = ROSVisualizer('diff_drive_vis', 'map')
+    vis = ROSVisualizer('diff_drive_vis', 'world')
 
     diff_p = [point3(x, y, 0) for x, y, _ in diff_points]
     diff_d = [vector3(cos(a), sin(a), 0) for _, _, a in diff_points]

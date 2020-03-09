@@ -50,7 +50,7 @@ class TrackerNode(object):
         self.joints              = set()
         self.joint_aliases       = {}
         
-        self.visualizer = ROSVisualizer('/tracker_vis', 'map') if visualize else None
+        self.visualizer = ROSVisualizer('/tracker_vis', 'world') if visualize else None
 
         self.pub_js  = rospy.Publisher(  js_topic, ValueMapMsg, queue_size=1)
         self.sub_obs = rospy.Subscriber(obs_topic,      PSAMsg, self.cb_process_obs, queue_size=5)

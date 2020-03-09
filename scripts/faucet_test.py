@@ -11,10 +11,10 @@ if __name__ == '__main__':
     km = GeometryModel()
 
     geom_head = Geometry(Path('head'), spw.eye(4), 'mesh', mesh='package://kineverse_experiment_world/urdf/faucet_head.obj')
-    rb_head   = RigidBody(Path('map'), spw.eye(4), geometry={0: geom_head}, collision={0: geom_head})
+    rb_head   = RigidBody(Path('world'), spw.eye(4), geometry={0: geom_head}, collision={0: geom_head})
 
     geom_base = Geometry(Path('base'), spw.eye(4), 'mesh', mesh='package://kineverse_experiment_world/urdf/faucet_base.obj')
-    rb_base   = RigidBody(Path('map'), spw.eye(4), geometry={0: geom_base}, collision={0: geom_base})
+    rb_base   = RigidBody(Path('world'), spw.eye(4), geometry={0: geom_base}, collision={0: geom_base})
 
     km.apply_operation('create base', OP_CCO(Path('base'), rb_base))
     km.apply_operation('create head', OP_CCO(Path('head'), rb_head))
@@ -33,4 +33,3 @@ if __name__ == '__main__':
 
     with open('faucet.json', 'w') as f:
         km.save_to_file(f)
-

@@ -107,26 +107,26 @@ if __name__ == '__main__':
     load_urdf(km, Path('kitchen'), kitchen_model)
 
     km.clean_structure()
-    km.apply_operation_before('create map', 'create {}'.format(robot), CreateComplexObject(Path('map'), Frame('')))
+    km.apply_operation_before('create world', 'create {}'.format(robot), CreateComplexObject(Path('world'), Frame('')))
 
     if robot == 'pr2' or use_omni:
-        base_op = create_omnibase_joint_with_symbols(Path('map/pose'), 
+        base_op = create_omnibase_joint_with_symbols(Path('world/pose'), 
                                                    Path('{}/links/{}/pose'.format(robot, urdf_model.get_root())),
-                                                   Path('{}/joints/to_map'.format(robot)),
+                                                   Path('{}/joints/to_world'.format(robot)),
                                                    vector3(0,0,1),
                                                    1.0, 0.6, Path(robot))
     else:
-        base_op = create_roomba_joint_with_symbols(Path('map/pose'), 
+        base_op = create_roomba_joint_with_symbols(Path('world/pose'), 
                                                    Path('{}/links/{}/pose'.format(robot, urdf_model.get_root())),
-                                                   Path('{}/joints/to_map'.format(robot)),
+                                                   Path('{}/joints/to_world'.format(robot)),
                                                    vector3(0,0,1),
                                                    vector3(1,0,0),
                                                    1.0, 0.6, Path(robot))
-    km.apply_operation_after('connect map {}'.format(urdf_model.get_root()), 'create {}/{}'.format(robot, urdf_model.get_root()), base_op)
+    km.apply_operation_after('connect world {}'.format(urdf_model.get_root()), 'create {}/{}'.format(robot, urdf_model.get_root()), base_op)
     km.clean_structure()
     km.dispatch_events()
 
-    visualizer = ROSBPBVisualizer('/bullet_test', base_frame='map')
+    visualizer = ROSBPBVisualizer('/bullet_test', base_frame='world')
     traj_vis   = TrajectoryVisualizer(visualizer)
 
     traj_vis.add_articulated_object(Path(robot),     km.get_data(robot))
@@ -158,7 +158,7 @@ if __name__ == '__main__':
              ]
     
     # QP CONFIGURTION
-    base_joint    = km.get_data('{}/joints/to_map'.format(robot))
+    base_joint    = km.get_data('{}/joints/to_world'.format(robot))
     base_link     = km.get_data('{}/links/{}'.format(robot, urdf_model.get_root())) 
     joint_symbols = [j.position for j in km.get_data('{}/joints'.format(robot)).values() if hasattr(j, 'position') and type(j.position) is Symbol]
     

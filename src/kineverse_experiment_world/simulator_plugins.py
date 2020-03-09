@@ -25,7 +25,7 @@ class PoseObservationPublisher(SimulatorPlugin):
         self.far         = far
         self.noise_exp   = noise_exp
         self._enabled    = True
-        self.visualizer  = ROSVisualizer('pose_obs_viz', 'map') if debug else None
+        self.visualizer  = ROSVisualizer('pose_obs_viz', 'world') if debug else None
         self._last_update = 1000
         self._update_wait = 1.0 / frequency
 

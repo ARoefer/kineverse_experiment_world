@@ -21,7 +21,7 @@ def simple_kinematics(km, vis):
 
     box_parent   = Geometry('prismatic_parent', spw.eye(4), 'box', vector3(1.00, 0.08, 0.08))
     box_child    = Geometry('prismatic_child', spw.eye(4), 'box', vector3(0.12, 0.12, 0.12))
-    parent_obj   = RigidBody('map', parent_frame, geometry={1: box_parent}, collision={1: box_parent})
+    parent_obj   = RigidBody('world', parent_frame, geometry={1: box_parent}, collision={1: box_parent})
     child_obj    = RigidBody('prismatic_parent', child_frame, geometry={1: box_child}, collision={1: box_child})
 
     km.set_data('prismatic_parent', parent_obj)
@@ -33,7 +33,7 @@ def simple_kinematics(km, vis):
 
     hinge_parent = Geometry('hinge_parent', spw.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/hinge_part_b.obj')
     hinge_child  = Geometry('hinge_child', spw.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/hinge_part_a.obj')
-    parent_obj   = RigidBody('map', parent_frame, geometry={1: hinge_parent}, collision={1: hinge_parent})
+    parent_obj   = RigidBody('world', parent_frame, geometry={1: hinge_parent}, collision={1: hinge_parent})
     child_obj    = RigidBody('hinge_parent', child_frame, geometry={1: hinge_child}, collision={1: hinge_child})
 
     km.set_data('hinge_parent', parent_obj)
@@ -46,7 +46,7 @@ def simple_kinematics(km, vis):
 
     cylin_parent = Geometry('cylin_parent', rotation3_rpy(0, 0.5*pi, 0), 'cylinder', scale=vector3(0.1, 0.1, 1.0))
     cylin_child  = Geometry('cylin_child', rotation3_rpy(0, 0.5*pi, 0), 'mesh', mesh='package://kineverse_experiment_world/meshes/weird_nut.obj')
-    parent_obj   = RigidBody('map', parent_frame, geometry={1: cylin_parent}, collision={1: cylin_parent})
+    parent_obj   = RigidBody('world', parent_frame, geometry={1: cylin_parent}, collision={1: cylin_parent})
     child_obj    = RigidBody('cylin_parent', child_frame, geometry={1: cylin_child}, collision={1: cylin_child})    
 
     km.set_data('cylin_parent', parent_obj)
@@ -59,7 +59,7 @@ def simple_kinematics(km, vis):
 
     screw_parent = Geometry('screw_parent', translation3(-0.5,0,0) * rotation3_rpy(0, 0.5*pi, 0), 'mesh', mesh='package://kineverse_experiment_world/meshes/screw_thread.obj')
     screw_child  = Geometry('screw_child', rotation3_rpy(0, 0.5*pi, 0), 'mesh', mesh='package://kineverse_experiment_world/meshes/regular_nut.obj')
-    parent_obj   = RigidBody('map', parent_frame, geometry={1: screw_parent}, collision={1: screw_parent})
+    parent_obj   = RigidBody('world', parent_frame, geometry={1: screw_parent}, collision={1: screw_parent})
     child_obj    = RigidBody('screw_parent', child_frame, geometry={1: screw_child}, collision={1: screw_child})    
 
     km.set_data('screw_parent', parent_obj)
@@ -74,7 +74,7 @@ def simple_kinematics(km, vis):
 
     ball_parent = Geometry('ball_parent', rotation3_rpy(0, 0.5*pi, 0), 'mesh', mesh='package://kineverse_experiment_world/meshes/ball_joint_socket.obj')
     ball_child  = Geometry('ball_child', rotation3_rpy(0, 0.5*pi, 0), 'mesh', mesh='package://kineverse_experiment_world/meshes/ball_joint.obj')
-    parent_obj   = RigidBody('map', parent_frame, geometry={1: ball_parent}, collision={1: ball_parent})
+    parent_obj   = RigidBody('world', parent_frame, geometry={1: ball_parent}, collision={1: ball_parent})
     child_obj    = RigidBody('ball_parent', child_frame, geometry={1: ball_child}, collision={1: ball_child})    
 
     km.set_data('ball_parent', parent_obj)
@@ -98,7 +98,7 @@ def simple_kinematics(km, vis):
     rotator_geom = Geometry('rotator', spw.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/rotator.obj')
     rod_geom     = Geometry('rod', spw.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/connecting_rod.obj')
     piston_geom  = Geometry('piston', spw.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/piston.obj')
-    rotator_obj  = RigidBody('map', rotator_frame, geometry={1: rotator_geom}, collision={1: rotator_geom})
+    rotator_obj  = RigidBody('world', rotator_frame, geometry={1: rotator_geom}, collision={1: rotator_geom})
     rod_obj      = RigidBody('rotator', rod_frame, geometry={1: rod_geom}, collision={1: rod_geom})
     piston_obj   = RigidBody('piston', piston_frame, geometry={1: piston_geom}, collision={1: piston_geom})
 
@@ -114,8 +114,8 @@ def simple_kinematics(km, vis):
     geom_head = Geometry('head', spw.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/faucet_handle.obj')
     geom_base = Geometry('base', spw.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/faucet_base.obj')
 
-    rb_base   = RigidBody('map', base_frame, geometry={0: geom_base}, collision={0: geom_base})
-    rb_head   = RigidBody('map', head_frame, geometry={0: geom_head}, collision={0: geom_head})
+    rb_base   = RigidBody('world', base_frame, geometry={0: geom_base}, collision={0: geom_base})
+    rb_head   = RigidBody('world', head_frame, geometry={0: geom_head}, collision={0: geom_head})
 
     water_flow = dot(y_of(head_frame), y_of(base_frame))
     water_temperature = dot(y_of(head_frame), y_of(base_frame))
@@ -130,7 +130,7 @@ def simple_kinematics(km, vis):
 if __name__ == '__main__':
     rospy.init_node('kinematics_test')
 
-    vis = ROSBPBVisualizer('kinematics_test', 'map')
+    vis = ROSBPBVisualizer('kinematics_test', 'world')
 
     km = GeometryModel()
     simple_kinematics(km, vis)

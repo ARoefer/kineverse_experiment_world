@@ -105,7 +105,7 @@ if __name__ == '__main__':
 
     columns = ['DoF', 'Poses', 'Linear SD', 'Angular SD', 'Mean Error', 'SD Error', 'Min Error', 'Max Error', 'Mean Iterations', 'Iteration Duration']
     df_results = pd.DataFrame(columns=columns)
-    visualizer = ROSBPBVisualizer('/tracker_vis', 'map')
+    visualizer = ROSBPBVisualizer('/tracker_vis', 'world')
 
     last_n_dof = 0
 

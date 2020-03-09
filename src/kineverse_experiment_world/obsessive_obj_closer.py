@@ -5,7 +5,7 @@ from kineverse.gradients.gradient_math       import *
 from kineverse.gradients.gradient_container  import collect_free_symbols
 from kineverse.gradients.diff_logic          import erase_type, get_symbol_type, TYPE_POSITION
 from kineverse.model.paths                   import Path
-from kineverse.model.kinematic_model         import Constraint
+from kineverse.model.articulation_model         import Constraint
 from kineverse.model.geometry_model          import GeometryModel, contact_geometry, generate_contact_model
 from kineverse.motion.min_qp_builder         import GeomQPBuilder  as GQPB,\
                                                     TypedQPBuilder as TQPB,\
@@ -58,7 +58,7 @@ class ObsessiveObjectCloser(object):
         self._t_last_update     = None
         self._resting_pose      = {Position(self.robot_path + (n,)): v for n, v in resting_pose.items()} if resting_pose is not None else None
 
-        self.debug_visualizer = ROSBPBVisualizer('/debug_vis', 'map')
+        self.debug_visualizer = ROSBPBVisualizer('/debug_vis', 'world')
 
         self.urdf_path = urdf_path
         self.obj = None
@@ -95,12 +95,12 @@ class ObsessiveObjectCloser(object):
     def cb_robot_model_changed(self, model):
         print('Robot model changed')
         self.robot = model
-        temp = [j for j in self.robot.joints.values() if j.parent == 'map']
+        temp = [j for j in self.robot.joints.values() if j.parent == 'world']
         if len(temp) > 0:
             self.base_joint = temp[0]
             self.base_link = Path(self.base_joint.child)[len(self.robot_eef_path) - 2:].get_data(self.robot)
         else:
-            self.base_link = [l for l in self.robot.links.values() if l.parent == 'map'][0]
+            self.base_link = [l for l in self.robot.links.values() if l.parent == 'world'][0]
         self.robot_camera = self.robot_camera_path[len(self.robot_camera_path) - 2:].get_data(self.robot)
         self.robot_eef    = self.robot_eef_path[len(self.robot_eef_path) - 2:].get_data(self.robot)
 
