@@ -65,35 +65,50 @@ if __name__ == '__main__':
                 'a_v':  CV(-a_limit, a_limit,  a_v, 0.001)})
 
 
-    state = {s: 0.0 for s in qpb.free_symbols}
-    state[DT_SYM] = 0.1
 
-    diff_points = []
+
+    full_diff_points = []
     md_points   = []
-    for x in range(400):
-        cmd = qpb.get_cmd(state)
+    cmds = [
+            {rw_v: -0.8, lw_v: -0.8},
+            {rw_v: -1.0, lw_v: -0.0},
+            {rw_v: -0.0, lw_v: -1.0},
+            {rw_v: 0.8, lw_v: 0.8},
+            {rw_v: 1.0, lw_v: 0.0},
+            {rw_v: 0.0, lw_v: 1.0},
+            # {rw_v: -1.0, lw_v: 1.0},
+            ]
+    for cmd in cmds: 
+        diff_points = []
+        state = {s: 0.0 for s in qpb.free_symbols}
+        state[DT_SYM] = 0.1
 
-        state.update({s: e.subs(cmd).subs(state) for s, e in int_rules.items()})
+        for x in range(100):
 
-        diff_points.append((state[x1], state[y1], state[a1]))
-        md_points.append((state[x2], state[y2], state[a2]))
+            state.update({s: e.subs(cmd).subs(state) for s, e in int_rules.items()})
 
-        if qpb.equilibrium_reached():
-            print('optimization ende early')
-            break
+            diff_points.append((state[x1], state[y1], state[a1]))
+            md_points.append((state[x2], state[y2], state[a2]))
+
+            # if qpb.equilibrium_reached():
+            #     print('optimization ende early')
+            #     break
+
+        full_diff_points.append(diff_points)
 
 
     vis = ROSVisualizer('diff_drive_vis', 'world')
 
-    diff_p = [point3(x, y, 0) for x, y, _ in diff_points]
-    diff_d = [vector3(cos(a), sin(a), 0) for _, _, a in diff_points]
 
-    md_p = [point3(x, y, 0) for x, y, _ in md_points]
-    md_d = [vector3(cos(a), sin(a), 0) for _, _, a in md_points]
+    # md_p = [point3(x, y, 0) for x, y, _ in md_points]
+    # md_d = [vector3(cos(a), sin(a), 0) for _, _, a in md_points]
 
     vis.begin_draw_cycle('paths')
-    vis.draw_sphere('paths', goal, 0.02, r=0, b=1)
-    vis.draw_strip('paths', spw.eye(4), 0.02, diff_p)
+    # vis.draw_sphere('paths', goal, 0.02, r=0, b=1)
+    for n, diff_points in enumerate(full_diff_points):
+        diff_p = [point3(x, y, 0) + vector3((n / 3) * 0.5, (n % 3)* -0.5, 0) for x, y, _ in diff_points]
+        diff_d = [vector3(cos(a), sin(a), 0) for _, _, a in diff_points]
+        vis.draw_strip('paths', spw.eye(4), 0.02, diff_p)
     #vis.draw_strip('paths', spw.eye(4), 0.02, md_p, r=0, g=1)
     vis.render('paths')
 
