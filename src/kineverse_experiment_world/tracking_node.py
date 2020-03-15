@@ -3,20 +3,20 @@ from collections import namedtuple
 
 from multiprocessing import RLock
 
-from kineverse.gradients.gradient_math      import spw,\
+from kineverse.gradients.gradient_math      import se,                  \
                                                    rotation3_axis_angle,\
-                                                   frame3_axis_angle, \
-                                                   frame3_quaternion, \
-                                                   norm, \
-                                                   rot_of, \
-                                                   pos_of, \
-                                                   vector3, \
-                                                   Position, \
+                                                   frame3_axis_angle,   \
+                                                   frame3_quaternion,   \
+                                                   norm,                \
+                                                   rot_of,              \
+                                                   pos_of,              \
+                                                   vector3,             \
+                                                   Position,            \
                                                    subs
 from kineverse.gradients.diff_logic         import get_diff_symbol, erase_type
 from kineverse.model.paths                  import Path
 from kineverse.model.geometry_model         import GeometryModel
-from kineverse.motion.min_qp_builder        import SoftConstraint as SC,\
+from kineverse.motion.min_qp_builder        import SoftConstraint as SC,   \
                                                    TypedQPBuilder as TQPB, \
                                                    generate_controlled_values
 from kineverse.motion.integrator            import CommandIntegrator
@@ -118,8 +118,8 @@ class TrackerNode(object):
                 if self.visualizer is not None:
                     poses = [t.pose.subs(self.integrator.state) for t in self.tracked_poses.values()]
                     self.visualizer.begin_draw_cycle('obs_points')
-                    self.visualizer.draw_points('obs_points', spw.eye(4), 0.1, [pos_of(p) for p in poses if len(p.free_symbols) == 0])
-                    # self.visualizer.draw_poses('obs_points', spw.eye(4), 0.1, 0.02, [p for p in poses if len(p.free_symbols) == 0])
+                    self.visualizer.draw_points('obs_points', se.eye(4), 0.1, [pos_of(p) for p in poses if len(p.free_symbols) == 0])
+                    # self.visualizer.draw_poses('obs_points', se.eye(4), 0.1, 0.02, [p for p in poses if len(p.free_symbols) == 0])
                     self.visualizer.render('obs_points')
 
             else:

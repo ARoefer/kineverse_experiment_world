@@ -1,12 +1,14 @@
 import rospy
 import numpy as np
-import giskardpy.symengine_wrappers as spw
 
 from iai_bullet_sim.basic_simulator         import SimulatorPlugin
 from iai_bullet_sim.multibody               import MultiBody
-from kineverse_experiment_world.utils       import np_random_normal_offset, np_random_quat_normal
+
+import kineverse.gradients.gradient_math    as gm
+
 from kineverse.visualization.ros_visualizer import ROSVisualizer
 from kineverse.bpb_wrapper                  import pb, transform_to_matrix
+from kineverse_experiment_world.utils       import np_random_normal_offset, np_random_quat_normal
 
 from kineverse_experiment_world.msg import PoseStampedArray as PSAMsg
 from geometry_msgs.msg              import PoseStamped as PoseStampedMsg
@@ -42,8 +44,8 @@ class PoseObservationPublisher(SimulatorPlugin):
         if self._last_update >= self._update_wait:
             self._last_update = 0
             cf_tuple = self.multibody.get_link_state(self.camera_link).worldFrame
-            camera_frame = spw.frame3_quaternion(cf_tuple.position.x, cf_tuple.position.y, cf_tuple.position.z, *cf_tuple.quaternion)
-            cov_proj = spw.rot_of(camera_frame)[:3, :3]
+            camera_frame = gm.frame3_quaternion(cf_tuple.position.x, cf_tuple.position.y, cf_tuple.position.z, *cf_tuple.quaternion)
+            cov_proj = gm.rot_of(camera_frame)[:3, :3]
             inv_cov_proj = cov_proj.T
 
             out = PSAMsg()
@@ -69,10 +71,10 @@ class PoseObservationPublisher(SimulatorPlugin):
                     else:
                         msg = self.message_templates[pname]
 
-                    obj_pos = spw.point3(*pose.position)
-                    c2o  = obj_pos - spw.pos_of(camera_frame)
-                    dist = spw.norm(c2o)
-                    if dist < self.far and dist > self.near and spw.dot(c2o, spw.x_of(camera_frame)) > spw.cos(self.fov * 0.5) * dist:
+                    obj_pos = gm.point3(*pose.position)
+                    c2o  = obj_pos - gm.pos_of(camera_frame)
+                    dist = gm.norm(c2o)
+                    if dist < self.far and dist > self.near and gm.dot(c2o, gm.x_of(camera_frame)) > gm.cos(self.fov * 0.5) * dist:
 
 
                         noise = 2 ** (self.noise_exp * dist) - 1
@@ -97,7 +99,7 @@ class PoseObservationPublisher(SimulatorPlugin):
                 self.publisher.publish(out)
 
             if self.visualizer is not None:
-                self.visualizer.draw_poses('debug', spw.eye(4), 0.1, 0.02, poses)
+                self.visualizer.draw_poses('debug', gm.se.eye(4), 0.1, 0.02, poses)
                 self.visualizer.render()
 
 

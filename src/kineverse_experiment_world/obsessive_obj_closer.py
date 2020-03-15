@@ -84,8 +84,8 @@ class ObsessiveObjectCloser(object):
         self.obj = model
         self.possible_targets  = [(Path(joint.child), joint.position) for jname, joint in self.obj.joints.items() if joint.type in goal_joints]
         self.target_symbol_map = dict(self.possible_targets)
-        self.obj_world         = self.km.get_active_geometry({s for _, s in self.possible_targets if type(s) is spw.Symbol})
-        new_state = {s: 0.0 for _, s in self.possible_targets if type(s) is spw.Symbol}
+        self.obj_world         = self.km.get_active_geometry({s for _, s in self.possible_targets if type(s) is se.Symbol})
+        new_state = {s: 0.0 for _, s in self.possible_targets if type(s) is se.Symbol}
         self.obj_js_aliases = {str(Path(erase_type(s))[len(self.urdf_path):]): s for s in new_state.keys()}
         print('Object aliases:\n{}'.format('\n'.join(['{:>20}: {}'.format(k, v) for k, v in self.obj_js_aliases.items()])))
         self.inverse_js_aliases.update({erase_type(v): k for k, v in self.obj_js_aliases.items()})
@@ -104,7 +104,7 @@ class ObsessiveObjectCloser(object):
         self.robot_camera = self.robot_camera_path[len(self.robot_camera_path) - 2:].get_data(self.robot)
         self.robot_eef    = self.robot_eef_path[len(self.robot_eef_path) - 2:].get_data(self.robot)
 
-        self.robot_joint_symbols = {j.position for j in self.robot.joints.values() if hasattr(j, 'position') and type(j.position) is spw.Symbol}
+        self.robot_joint_symbols = {j.position for j in self.robot.joints.values() if hasattr(j, 'position') and type(j.position) is se.Symbol}
         self.robot_controlled_symbols = {DiffSymbol(j) for j in self.robot_joint_symbols}
 
         if type(self.base_joint) is RoombaJoint:

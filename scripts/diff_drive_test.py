@@ -108,7 +108,7 @@ if __name__ == '__main__':
     for n, diff_points in enumerate(full_diff_points):
         diff_p = [point3(x, y, 0) + vector3((n / 3) * 0.5, (n % 3)* -0.5, 0) for x, y, _ in diff_points]
         diff_d = [vector3(cos(a), sin(a), 0) for _, _, a in diff_points]
-        vis.draw_strip('paths', spw.eye(4), 0.02, diff_p)
+        vis.draw_strip('paths', se.eye(4), 0.02, diff_p)
     #vis.draw_strip('paths', spw.eye(4), 0.02, md_p, r=0, g=1)
     vis.render('paths')
 

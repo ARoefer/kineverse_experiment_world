@@ -23,8 +23,8 @@ def simple_kinematics(km, vis):
     child_to_parent = translation3(a, 0, 0)
     child_frame     = parent_frame * child_to_parent
 
-    box_parent   = Geometry('prismatic_parent', spw.eye(4), 'box', vector3(1.00, 0.08, 0.08))
-    box_child    = Geometry('prismatic_child', spw.eye(4), 'box', vector3(0.12, 0.12, 0.12))
+    box_parent   = Geometry('prismatic_parent', se.eye(4), 'box', vector3(1.00, 0.08, 0.08))
+    box_child    = Geometry('prismatic_child', se.eye(4), 'box', vector3(0.12, 0.12, 0.12))
     parent_obj   = RigidBody('world', parent_frame, geometry={1: box_parent}, collision={1: box_parent})
     child_obj    = RigidBody('prismatic_parent', child_frame, to_parent=child_to_parent, geometry={1: box_child}, collision={1: box_child})
 
@@ -36,8 +36,8 @@ def simple_kinematics(km, vis):
     child_to_parent = translation3(0,0,0.08) * rotation3_axis_angle(vector3(0,0,1), a)
     child_frame     = parent_frame * child_to_parent
 
-    hinge_parent = Geometry('hinge_parent', spw.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/hinge_part_b.obj')
-    hinge_child  = Geometry('hinge_child', spw.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/hinge_part_a.obj')
+    hinge_parent = Geometry('hinge_parent', se.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/hinge_part_b.obj')
+    hinge_child  = Geometry('hinge_child', se.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/hinge_part_a.obj')
     parent_obj   = RigidBody('world', parent_frame, geometry={1: hinge_parent}, collision={1: hinge_parent})
     child_obj    = RigidBody('hinge_parent', child_frame, to_parent=child_to_parent, geometry={1: hinge_child}, collision={1: hinge_child})
 
@@ -106,9 +106,9 @@ def simple_kinematics(km, vis):
     piston_to_rod   = frame3_axis_angle(vector3(1,0,0), asin(sin(SYM_ROTATION) * 0.05 / 0.15), point3(0,0,0.15))
     piston_frame    = rod_frame * piston_to_rod # translation3(*(rod_frame * point3(0,0,0.15)))
 
-    rotator_geom = Geometry('rotator', spw.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/rotator.obj')
-    rod_geom     = Geometry('rod', spw.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/connecting_rod.obj')
-    piston_geom  = Geometry('piston', spw.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/piston.obj')
+    rotator_geom = Geometry('rotator', se.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/rotator.obj')
+    rod_geom     = Geometry('rod', se.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/connecting_rod.obj')
+    piston_geom  = Geometry('piston', se.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/piston.obj')
     rotator_obj  = RigidBody('world', rotator_frame, to_parent=rotator_frame, geometry={1: rotator_geom}, collision={1: rotator_geom})
     rod_obj      = RigidBody('rotator', rod_frame, to_parent=rod_to_rotator, geometry={1: rod_geom}, collision={1: rod_geom})
     piston_obj   = RigidBody('rod', piston_frame, to_parent=piston_to_rod, geometry={1: piston_geom}, collision={1: piston_geom})
@@ -123,8 +123,8 @@ def simple_kinematics(km, vis):
     head_to_base = translation3(0, -0.006, 0.118) * rotation3_rpy(0.3 * (ay**2) - 0.3, 0, ay)
     head_frame   = base_frame * head_to_base
 
-    geom_head = Geometry('faucet_head', spw.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/faucet_handle.obj')
-    geom_base = Geometry('faucet_base', spw.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/faucet_base.obj')
+    geom_head = Geometry('faucet_head', se.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/faucet_handle.obj')
+    geom_base = Geometry('faucet_base', se.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/faucet_base.obj')
 
     rb_base   = RigidBody('world', base_frame, geometry={0: geom_base}, collision={0: geom_base})
     rb_head   = RigidBody('faucet_base', head_frame, to_parent=head_to_base, geometry={0: geom_head}, collision={0: geom_head})
@@ -142,9 +142,9 @@ def simple_kinematics(km, vis):
     handle_to_door  = frame3_axis_angle(vector3(1,0,0), a * 0.5 + 0.5 - pi * 0.5, point3(0, 0.37, 0))
     handle_frame    = door_frame * handle_to_door
 
-    compartment_geom = Geometry('compartment', spw.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/compartment.obj')
-    door_geom    = Geometry('door', spw.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/compartment_door.obj')
-    handle_geom  = Geometry('handle', spw.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/compartment_handle.obj')
+    compartment_geom = Geometry('compartment', se.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/compartment.obj')
+    door_geom    = Geometry('door', se.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/compartment_door.obj')
+    handle_geom  = Geometry('handle', se.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/compartment_handle.obj')
     compartment_obj = RigidBody('world', parent_frame, geometry={1: compartment_geom}, collision={1: compartment_geom})
     door_obj        = RigidBody('compartment', door_frame, to_parent=door_to_parent, geometry={1: door_geom}, collision={1: door_geom})
     handle_obj      = RigidBody('door', handle_frame, to_parent=handle_to_door, geometry={1: handle_geom}, collision={1: handle_geom})

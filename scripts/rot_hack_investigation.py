@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import numpy as np
+import pandas as pd
 from collections import namedtuple
 
 from kineverse.gradients.gradient_math import *
@@ -14,7 +15,7 @@ from kineverse.time_wrapper            import Time
 
 from kineverse_experiment_world.utils  import np_sphere_sampling, \
                                               sphere_sampling,    \
-                                              random_rot_uniform, \
+                                              random_rot_uniform  \
 
 OptResult = namedtuple('OptResult', ['error_9d', 'error_axa', 'x', 'y', 'z', 'n_steps', 'sec_per_it'])
 TotalResults = namedtuple('TotalResults', ['errors_9d', 'errors_axa', 'iterations'])
@@ -47,7 +48,7 @@ def rot_goal_9D(r_ctrl, r_goal):
 
 if __name__ == '__main__':
     
-    r_points = 50
+    r_points = 1000
     step     = 0.5
 
 
@@ -73,7 +74,7 @@ if __name__ == '__main__':
                                                 constraints, 
                                                 {str(s): CV(-1, 1, DiffSymbol(s), 1e-3) for s in sum([list(c.expr.free_symbols) 
                                                                                             for c in constraints.values()], [])}),
-                                                start_state={s_x: 1, s_y: 0, s_z: 0})#,
+                                                start_state={s_x: 1, s_y: 0, s_z: 0}, equilibrium=0.001)#,
                                                 # recorded_terms=recorded_terms)
             integrator.restart('Convergence Test {} {}'.format(x, k))
             try:
@@ -84,7 +85,9 @@ if __name__ == '__main__':
                 final_ax, final_a = axis_angle_from_matrix(final_r)
                 final_axa = final_ax * final_a
                 error_9d  = sum([np.abs(float(x)) for x in list(final_r - r_goal)])
-                error_axa = float(norm(final_axa - goal_axa))
+                error_axa_sym = norm(final_axa - goal_axa)
+                # print(final_ax, final_a, type(final_a))
+                error_axa = float(error_axa_sym)
                 t_results[k] = OptResult(error_9d,
                                          error_axa, 
                                          integrator.recorder.data['x_p'], 
@@ -110,7 +113,22 @@ if __name__ == '__main__':
         # stds.append(np.std(data_array, axis=1))
         
 
-    
+    sub_headings = ['Mean', 'SD', 'Min', 'Max']
+    np_functions = [np.mean, np.std, np.min, np.max]
+    def apply_np_transform(d, c):
+        for s, f in zip(sub_headings, np_functions):
+            if s in c:
+                return f(d)
+        raise Exception('Could not figure out which np function to apply for "{}"'.format(c))
+
+
+    columns = ['Method'] + ['Error 9d {}'.format(x)  for x in sub_headings] + \
+                           ['Error AxA {}'.format(x) for x in sub_headings] + \
+                           ['Iterations {}'.format(x) for x in sub_headings[:2]] + \
+                           ['s/Iteration {}'.format(x) for x in sub_headings] + \
+                           ['Failures in %']
+    rows = []
+
     for k in sorted(methods.keys()):
         errors_9d  = [] 
         errors_axa = []
@@ -128,6 +146,7 @@ if __name__ == '__main__':
             else:
                 failures += 1
 
+        rows.append([k] + [apply_np_transform(d, c) for c, d in zip(columns[1:-1], [errors_9d]*4 + [errors_axa]*4 + [iterations]*2 + [avg_iter]*4)] + [float(failures) / len(results)])
         print('Results for {}:\n'
               '  Error 9d:\n    Mean: {}\n    StdD: {}\n    Min: {}\n    Max: {}\n'
               '  Error AxA:\n    Mean: {}\n    StdD: {}\n    Min: {}\n    Max: {}\n'
@@ -139,7 +158,7 @@ if __name__ == '__main__':
                 np.std(errors_9d),
                 np.min(errors_9d),
                 np.max(errors_9d),
-                np.mean(error_axa),
+                np.mean(errors_axa),
                 np.std(errors_axa),
                 np.min(error_axa),
                 np.max(errors_axa),
@@ -162,6 +181,10 @@ if __name__ == '__main__':
         #                                                                                  np.std(final_errors[:, x]), 
         #                                                                                  np.min(final_errors[:, x]), 
         #                                                                                  np.max(final_errors[:, x])))
+
+    df = pd.DataFrame(columns=columns, data=rows)
+    print(df)
+    df.to_csv('rotation_comparison.csv', float_format='%.4f', index=False)
 
     # draw_recorders([rpy_integrator.recorder, ax_integrator.recorder, 
     #                 rpy_integrator.sym_recorder, ax_integrator.sym_recorder], 1, 4, 4).savefig('{}/rpy_vs_axis_angle.png'.format(res_pkg_path('package://kineverse_experiment_world/test'))
