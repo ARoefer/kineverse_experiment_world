@@ -26,7 +26,7 @@ if __name__ == '__main__':
                         "wrist_roll_joint"    : 0.0}
         closer = ObsessiveObjectCloser(Path('iai_oven_area'), Path('fetch/links/gripper_link'), 
                                        Path('fetch/links/head_camera_link'), 
-                                       '/iai_kitchen/joint_states', 
+                                       '/tracked/state', 
                                        '/fetch', resting_pose=resting_pose)
     elif robot_str == 'pr2':
         resting_pose = {'l_elbow_flex_joint' : -2.1213,
@@ -44,7 +44,7 @@ if __name__ == '__main__':
                         'torso_lift_joint'   : 0.16825}
         closer = ObsessiveObjectCloser(Path('iai_oven_area'), Path('pr2/links/r_gripper_r_finger_tip_link'), 
                                        Path('pr2/links/head_mount_link'), 
-                                       '/iai_kitchen/joint_states', 
+                                       '/tracked/state', 
                                        '/pr2', resting_pose=resting_pose)
 
 

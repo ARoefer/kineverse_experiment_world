@@ -16,7 +16,7 @@ from kineverse.motion.min_qp_builder         import GeomQPBuilder  as GQPB,\
                                                     depth_weight_controlled_values
 from kineverse.network.model_client          import ModelClient
 from kineverse.operations.urdf_operations    import URDFRobot
-from kineverse.operations.special_kinematics import RoombaJoint, OmnibaseJoint
+from kineverse.operations.special_kinematics import DiffDriveJoint, OmnibaseJoint
 from kineverse.type_sets                     import is_symbolic
 from kineverse.time_wrapper                  import Time
 from kineverse.visualization.bpb_visualizer  import ROSBPBVisualizer
@@ -107,8 +107,8 @@ class ObsessiveObjectCloser(object):
         self.robot_joint_symbols = {j.position for j in self.robot.joints.values() if hasattr(j, 'position') and type(j.position) is se.Symbol}
         self.robot_controlled_symbols = {DiffSymbol(j) for j in self.robot_joint_symbols}
 
-        if type(self.base_joint) is RoombaJoint:
-            self.robot_controlled_symbols.update({self.base_joint.lin_vel, self.base_joint.ang_vel})
+        if type(self.base_joint) is DiffDriveJoint:
+            self.robot_controlled_symbols.update({self.base_joint.l_wheel_vel, self.base_joint.r_wheel_vel})
             self.robot_joint_symbols.update({self.base_joint.x_pos, self.base_joint.y_pos, self.base_joint.z_pos, self.base_joint.a_pos})
             self._needs_odom = True
         elif type(self.base_joint) is OmnibaseJoint:
@@ -222,7 +222,7 @@ class ObsessiveObjectCloser(object):
 
     @profile
     def cb_robot_odometry(self, odom_msg):
-        if type(self.base_joint) is RoombaJoint:
+        if type(self.base_joint) is DiffDriveJoint:
             self.state[self.base_joint.x_pos] = odom_msg.pose.pose.position.x
             self.state[self.base_joint.y_pos] = odom_msg.pose.pose.position.y
             self.state[self.base_joint.z_pos] = odom_msg.pose.pose.position.z 
@@ -300,6 +300,9 @@ class ObsessiveObjectCloser(object):
                                                                                         BULLET_FIXED_OFFSET)
         controlled_values, hard_constraints = generate_controlled_values(hard_constraints, controlled_symbols)
         controlled_values = depth_weight_controlled_values(self.km, controlled_values, exp_factor=1.1)
+        if isinstance(self.base_joint, DiffDriveJoint):
+          controlled_values[str(self.base_joint.l_wheel_vel)].weight = 0.001 
+          controlled_values[str(self.base_joint.r_wheel_vel)].weight = 0.001 
 
         print('\n'.join(sorted([str(s) for s in geom_distance.free_symbols])))
 

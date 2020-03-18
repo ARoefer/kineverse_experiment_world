@@ -1,6 +1,6 @@
 <launch>
     <arg name="static_base" default="false"/>
 
-    <node pkg="kineverse" type="upload_roomba_robot.py" args="package://fetch_description/robots/fetch.urdf" name="fetch_uploader" output="screen" unless="$(arg static_base)"/>
+    <node pkg="kineverse" type="upload_diff_drive_robot.py" args="package://fetch_description/robots/fetch.urdf 0.06 0.374 True" name="fetch_uploader" output="screen" unless="$(arg static_base)"/>
     <node pkg="kineverse" type="upload_urdf.py" args="package://fetch_description/robots/fetch.urdf" name="fetch_uploader" output="screen" if="$(arg static_base)"/>
 </launch>

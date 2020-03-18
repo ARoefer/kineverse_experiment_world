@@ -119,7 +119,7 @@ def simple_kinematics(km, vis):
 
 
     # Faucet
-    base_frame   = frame3_axis_angle(vector3(NULL_SYMBOL,0,1), 0.56, point3(0,-6*0,0))
+    base_frame   = frame3_axis_angle(vector3(NULL_SYMBOL,0,1), 0.56, point3(0,-6,0))
     head_to_base = translation3(0, -0.006, 0.118) * rotation3_rpy(0.3 * (ay**2) - 0.3, 0, ay)
     head_frame   = base_frame * head_to_base
 
@@ -153,6 +153,78 @@ def simple_kinematics(km, vis):
     km.set_data('door', door_obj)
     km.set_data('handle', handle_obj)
 
+    # Multidependent kinematics 
+
+    parent_frame = frame3_axis_angle(vector3(NULL_SYMBOL,0,1), 0.56, point3(0,-8,0))
+    mount_offset = 0.1
+    null_angle = pi / 5
+    mount_l = rotation3_axis_angle(unitY, null_angle) * translation3(mount_offset,  0.05, 0)
+    mount_r = rotation3_axis_angle(unitY, null_angle) * translation3(mount_offset, -0.05, 0)
+    anchor  = translation3(0, 0, 0)
+    rotation_base = rotation3_axis_angle(unitY, null_angle)
+    bridge_length = 0.14
+
+    pos_l   = 0.125 + a * 0.025
+    angle_l = pi + acos((pos_l**2 + mount_offset ** 2 - bridge_length ** 2) / (2 * pos_l * mount_offset))
+    rot_piston_l = rotation3_axis_angle(unitY, angle_l)
+    pb_l_to_parent = mount_l * rot_piston_l
+    ph_l_to_pb = translation3(pos_l, 0, 0)
+    pep_l      = pos_of(pb_l_to_parent * ph_l_to_pb)
+
+    pos_r   = 0.125 + b * 0.025
+    angle_r = pi + acos((pos_r**2 + mount_offset ** 2 - bridge_length ** 2) / (2 * pos_r * mount_offset))
+    rot_piston_r = rotation3_axis_angle(unitY, angle_r)
+    pb_r_to_parent = mount_r * rot_piston_r
+    ph_r_to_pb = translation3(pos_r, 0, 0)
+    pep_r      = pos_of(pb_r_to_parent * ph_r_to_pb)
+
+    bar_center = (se.diag(1,0,1,1) * (pep_l + pep_r)) * 0.5
+    bar_offset = bar_center - pos_of(anchor)
+    bar_pitch  = rotation3_axis_angle(-unitY, se.atan2(bar_offset[2], bar_offset[0]))
+    bar_diag   = pep_r - pep_l
+    bar_roll   = rotation3_axis_angle(unitX, 
+                                      se.atan2(dot(z_of(bar_pitch), bar_diag), dot(y_of(bar_pitch), bar_diag)))
+
+
+    sphere     = Geometry('world', se.eye(4), 'sphere', scale=vector3(0.01, 0.01, 0.01))
+    thick_box  = Geometry('world', translation3(0.025,0,0), 'box', scale=vector3(0.05, 0.02, 0.02))
+    thin_box   = Geometry('world', translation3(-0.05,0,0),  'box', scale=vector3(0.1, 0.01, 0.01))
+    bar_box    = Geometry('world', translation3(bridge_length * 0.5, 0, 0),  
+                                   'box', scale=vector3(bridge_length, 0.02, 0.01))
+    parbar_box = Geometry('world', translation3(bridge_length, 0, 0),  
+                                  'box', scale=vector3(0.02, 0.1, 0.02))
+
+    mdj_base = Frame('world', parent_frame, to_parent=parent_frame)
+
+    pb_l_obj = RigidBody('mdj_base', parent_frame * pb_l_to_parent, 
+                                  to_parent=pb_l_to_parent,
+                                  geometry={ 1: thick_box},
+                                  collision={1: thick_box})
+    ph_l_obj = RigidBody('pb_l', parent_frame * pb_l_to_parent * ph_l_to_pb, 
+                                  to_parent=ph_l_to_pb,
+                                  geometry={ 1: thin_box},
+                                  collision={1: thin_box})
+    pb_r_obj = RigidBody('mdj_base', parent_frame * pb_r_to_parent, 
+                                  to_parent=pb_r_to_parent,
+                                  geometry={ 1: thick_box},
+                                  collision={1: thick_box})
+    ph_r_obj = RigidBody('pb_r', parent_frame * pb_r_to_parent * ph_r_to_pb, 
+                                  to_parent=ph_r_to_pb,
+                                  geometry={ 1: thin_box},
+                                  collision={1: thin_box})
+    bar_obj  = RigidBody('mdj_base', parent_frame * bar_pitch * bar_roll,
+                                  to_parent=bar_pitch * bar_roll, #
+                                  geometry={ 1: bar_box, 2: parbar_box},
+                                  collision={1: bar_box, 2: parbar_box})
+
+
+    km.set_data('mdj_base', mdj_base)
+    km.set_data('pb_l', pb_l_obj)
+    km.set_data('pb_r', pb_r_obj)
+    km.set_data('ph_l', ph_l_obj)
+    km.set_data('ph_r', ph_r_obj)
+    km.set_data('bar_obj', bar_obj)
+
     km.clean_structure()
     km.dispatch_events()
 
@@ -175,13 +247,13 @@ if __name__ == '__main__':
     while not rospy.is_shutdown():
         now = time()
         if now - last_update >= (1.0 / 50.0):
-            state = {s: sin(time()) for s in symbols}
+            state = {s: sin(time() + x * 0.1) for x, s in enumerate(symbols)}
             state[NULL_SYMBOL] = 0
             state[SYM_ROTATION] = now
 
             broadcaster.update_state(state)
             broadcaster.publish_state()
-            # coll_world.update_world(state)
+            coll_world.update_world(state)
 
             # vis.begin_draw_cycle('prismatic')
             # vis.draw_world('prismatic', coll_world)

@@ -1,14 +1,8 @@
 #!/usr/bin/env python
 import os
+import argparse
 import rospy
-import random
-import subprocess
-import tf
 import numpy as np
-
-from pprint import pprint
-
-import kineverse.json_wrapper as json
 
 from kineverse.gradients.gradient_math             import *
 from kineverse.model.paths                         import Path
@@ -28,16 +22,12 @@ from kineverse.motion.min_qp_builder               import TypedQPBuilder as TQPB
                                                           PANDA_LOGGING
 from kineverse.operations.basic_operations         import CreateComplexObject
 from kineverse.operations.urdf_operations          import load_urdf
-from kineverse.operations.special_kinematics       import create_roomba_joint_with_symbols, \
+from kineverse.operations.special_kinematics       import create_diff_drive_joint_with_symbols, \
                                                           create_omnibase_joint_with_symbols, \
-                                                          RoombaJoint
+                                                          DiffDriveJoint
 from kineverse.time_wrapper                        import Time
-from kineverse.type_sets                           import atomic_types
 from kineverse.urdf_fix                            import urdf_filler
 from kineverse.utils                               import res_pkg_path
-from kineverse.visualization.graph_generator       import generate_modifications_graph,\
-                                                          generate_dependency_graph,   \
-                                                          plot_graph
 from kineverse.visualization.bpb_visualizer        import ROSBPBVisualizer
 from kineverse.visualization.plotting              import draw_recorders,  \
                                                           split_recorders, \
@@ -47,9 +37,7 @@ from kineverse.visualization.trajectory_visualizer import TrajectoryVisualizer
 
 from kineverse_experiment_world.push_demo_base     import generate_push_closing
 
-from sensor_msgs.msg     import JointState as JointStateMsg
 from trajectory_msgs.msg import JointTrajectory as JointTrajectoryMsg
-from trajectory_msgs.msg import JointTrajectoryPoint as JointTrajectoryPointMsg
 
 from urdf_parser_py.urdf import URDF
 
@@ -78,9 +66,29 @@ use_omni =  False
 # use_geom_circulation = 'cubic'
 use_geom_circulation = 'cross'
 
+def str2bool(v):
+    if isinstance(v, bool):
+       return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
 
 if __name__ == '__main__':
     rospy.init_node('kineverse_sandbox')
+
+    parser = argparse.ArgumentParser(description='Plans motions for closing doors and drawers in the IAI kitchen environment using various robots.')
+    parser.add_argument('--robot', '-r', default='pr2', help='Name of the robot to use. [ pr2 | fetch ]')
+    parser.add_argument('--omni', type=str2bool, default=True, help='To use an omnidirectional base or not.')
+    parser.add_argument('--nav', type=str, default='cross', help='Heuristic for navigating object geometry. [ cross |  linear | cubic ]')
+    parser.add_argument('--vis-plan', type=str2bool, default=False, help='Visualize trajector while planning.')
+    
+    args = parser.parse_args()
+    robot    = args.robot
+    use_omni = args.omni
+    use_geom_circulation = args.nav
 
     plot_dir = res_pkg_path('package://kineverse/test/plots')
 
@@ -116,17 +124,17 @@ if __name__ == '__main__':
                                                    vector3(0,0,1),
                                                    1.0, 0.6, Path(robot))
     else:
-        base_op = create_roomba_joint_with_symbols(Path('world/pose'), 
+        base_op = create_diff_drive_joint_with_symbols(Path('world/pose'), 
                                                    Path('{}/links/{}/pose'.format(robot, urdf_model.get_root())),
                                                    Path('{}/joints/to_world'.format(robot)),
-                                                   vector3(0,0,1),
-                                                   vector3(1,0,0),
-                                                   1.0, 0.6, Path(robot))
+                                                   0.12 * 0.5,
+                                                   0.3748,
+                                                   17.4, Path(robot))
     km.apply_operation_after('connect world {}'.format(urdf_model.get_root()), 'create {}/{}'.format(robot, urdf_model.get_root()), base_op)
     km.clean_structure()
     km.dispatch_events()
 
-    visualizer = ROSBPBVisualizer('/bullet_test', base_frame='world')
+    visualizer = ROSBPBVisualizer('/vis_pushing_demo', base_frame='world')
     traj_vis   = TrajectoryVisualizer(visualizer)
 
     traj_vis.add_articulated_object(Path(robot),     km.get_data(robot))
@@ -164,12 +172,16 @@ if __name__ == '__main__':
     
     robot_controlled_symbols = {DiffSymbol(j) for j in joint_symbols}
     integration_rules        = None
-    if isinstance(base_joint, RoombaJoint):
-        robot_controlled_symbols |= {base_joint.lin_vel, base_joint.ang_vel}
-        integration_rules   = {base_joint.x_pos: base_joint.x_pos + DT_SYM * get_diff(pos_of(base_link.to_parent)[0].subs({base_joint.x_pos: 0})),
-                               base_joint.y_pos: base_joint.y_pos + DT_SYM * get_diff(pos_of(base_link.to_parent)[1].subs({base_joint.y_pos: 0})),
-                               base_joint.z_pos: base_joint.z_pos + DT_SYM * get_diff(pos_of(base_link.to_parent)[2].subs({base_joint.z_pos: 0})),
-                               base_joint.a_pos: base_joint.a_pos + DT_SYM * base_joint.ang_vel}
+    if isinstance(base_joint, DiffDriveJoint):
+        robot_controlled_symbols |= {base_joint.l_wheel_vel, base_joint.r_wheel_vel}
+
+        # print(pos_of(km.get_data('fetch/links/base_link/pose'))[0][base_joint.l_wheel_vel])
+        # exit()
+
+        integration_rules = {
+                      base_joint.x_pos: base_joint.x_pos + DT_SYM * (base_joint.r_wheel_vel * cos(base_joint.a_pos) * base_joint.wheel_radius * 0.5 + base_joint.l_wheel_vel * cos(base_joint.a_pos) * base_joint.wheel_radius * 0.5),
+                      base_joint.y_pos: base_joint.y_pos + DT_SYM * (base_joint.r_wheel_vel * sin(base_joint.a_pos) * base_joint.wheel_radius * 0.5 + base_joint.l_wheel_vel * sin(base_joint.a_pos) * base_joint.wheel_radius * 0.5),
+                      base_joint.a_pos: base_joint.a_pos + DT_SYM * (base_joint.r_wheel_vel * (base_joint.wheel_radius / base_joint.wheel_distance) + base_joint.l_wheel_vel * (- base_joint.wheel_radius / base_joint.wheel_distance))}
     else:
         robot_controlled_symbols |= {get_diff(x) for x in [base_joint.x_pos, base_joint.y_pos, base_joint.a_pos]}
     
@@ -177,6 +189,7 @@ if __name__ == '__main__':
     total_dur = []
 
     for part in parts:
+        print('Planning trajectory for "{}"'.format(part))
         kitchen_path = Path('kitchen/links/{}/pose'.format(part))
         obj_pose = km.get_data(kitchen_path)
 
@@ -197,6 +210,10 @@ if __name__ == '__main__':
         start_state.update({s: 0.4 for s in obj_pose.free_symbols})
         controlled_values, constraints = generate_controlled_values(constraints, controlled_symbols)
         controlled_values = depth_weight_controlled_values(km, controlled_values, exp_factor=1.1)
+        
+        if isinstance(base_joint, DiffDriveJoint):
+          controlled_values[str(base_joint.l_wheel_vel)].weight = 0.001 
+          controlled_values[str(base_joint.r_wheel_vel)].weight = 0.001 
 
         # CAMERA STUFF
         cam_to_obj = pos_of(obj_pose) - cam_pos
@@ -214,8 +231,10 @@ if __name__ == '__main__':
         else:
           start_state.update({Position(Path(robot) + (k,)): v  for k, v in tucked_arm.items()})
 
-        qpb = GQPB(coll_world, constraints, goal_constraints, controlled_values) #, visualizer=visualizer)
-        print(len(qpb.cv))
+        if args.vis_plan:
+            qpb = GQPB(coll_world, constraints, goal_constraints, controlled_values, visualizer=visualizer)
+        else:
+            qpb = GQPB(coll_world, constraints, goal_constraints, controlled_values) #, visualizer=visualizer)
         qpb._cb_draw = debug_draw
         integrator = CommandIntegrator(qpb,
         #integrator = CommandIntegrator(TQPB(constraints, goal_constraints, controlled_values),
@@ -248,7 +267,7 @@ if __name__ == '__main__':
             rec_w, rec_b, rec_c, recs = convert_qp_builder_log(integrator.qp_builder)
             draw_recorders([rec_b, rec_c] + [r for _, r in sorted(recs.items())], 1, 8, 4).savefig('{}/{}_sandbox_{}_constraints.png'.format(plot_dir, robot, part))
 
-        if False:
+        if not args.vis_plan:
             traj_vis.visualize(integrator.recorder.data, hz=50)
             pass
 

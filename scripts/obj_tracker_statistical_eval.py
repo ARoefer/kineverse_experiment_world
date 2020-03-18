@@ -2,7 +2,7 @@
 import rospy
 import numpy as np
 import pandas as pd
-
+import argparse
 
 from kineverse_experiment_world.tracking_node import TrackerNode
 
@@ -25,21 +25,18 @@ from geometry_msgs.msg import PoseStamped as PoseStampedMsg
 
 
 if __name__ == '__main__':
-    rospy.init_node('kineverse_tracking_node')
-    tracker = TrackerNode('/tracked/state', '/pose_obs', 1, 10, use_timer=False)
+    parser = argparse.ArgumentParser(description='Benchmark for the simple object tracker.')
+    parser.add_argument('--step', '-d', type=float, default=1, help='Size of the integration step. 0 < s < 1')
+    parser.add_argument('--max-iter', '-mi', type=int, default=10, help='Maximum number of iterations per observation.')
+    parser.add_argument('--samples', '-s', type=int, default=200, help='Number of operations to generate per configuration.')
+    parser.add_argument('--noise-lin', '-nl', type=float, default=0.15, help='Maximum linear noise.')
+    parser.add_argument('--noise-ang', '-na', type=float, default=10.0, help='Maximum angular noise in degrees.')
+    parser.add_argument('--noise-steps', '-ns', type=int, default=5, help='Number of steps from lowest to highest noise.')
+    parser.add_argument('--out', '-o', type=str, default='tracker_results_n_dof.csv', help='Name of the resulting csv file.')
+    args = parser.parse_args()
 
-    # tracker.track('/iai_oven_area/links/sink_area_dish_washer_door', 'iai_kitchen/sink_area_dish_washer_door')
-    # tracker.track('/iai_oven_area/links/sink_area_left_upper_drawer_main', 'iai_kitchen/sink_area_left_upper_drawer_main')
-    # tracker.track('/iai_oven_area/links/sink_area_left_middle_drawer_main', 'iai_kitchen/sink_area_left_middle_drawer_main')
-    # tracker.track('/iai_oven_area/links/sink_area_left_bottom_drawer_main', 'iai_kitchen/sink_area_left_bottom_drawer_main')
-    # tracker.track('/iai_oven_area/links/sink_area_trash_drawer_main', 'iai_kitchen/sink_area_trash_drawer_main')
-    # tracker.track('/iai_oven_area/links/iai_fridge_door', 'iai_kitchen/iai_fridge_door')
-    # tracker.track('/iai_oven_area/links/fridge_area_lower_drawer_main', 'iai_kitchen/fridge_area_lower_drawer_main')
-    # tracker.track('/iai_oven_area/links/oven_area_oven_door', 'iai_kitchen/oven_area_oven_door')
-    # tracker.track('/iai_oven_area/links/oven_area_area_right_drawer_main', 'iai_kitchen/oven_area_right_drawer_main')
-    # tracker.track('/iai_oven_area/links/oven_area_area_left_drawer_main', 'iai_kitchen/oven_area_left_drawer_main')
-    # tracker.track('/iai_oven_area/links/oven_area_area_middle_upper_drawer_main', 'iai_kitchen/oven_area_area_middle_upper_drawer_main')
-    # tracker.track('/iai_oven_area/links/oven_area_area_middle_lower_drawer_main', 'iai_kitchen/oven_area_area_middle_lower_drawer_main')
+    rospy.init_node('kineverse_tracking_node')
+    tracker = TrackerNode('/tracked/state', '/pose_obs', args.step, args.max_iter, use_timer=False)
 
     groups = [[('iai_oven_area/links/room_link', 'iai_oven_area/room_link'),
                ('iai_oven_area/links/fridge_area', 'iai_oven_area/fridge_area'),
@@ -109,6 +106,8 @@ if __name__ == '__main__':
 
     last_n_dof = 0
 
+    total_start = Time.now()
+
     for group in groups:
         for path, alias in group:
             tracker.track(path, alias)
@@ -148,25 +147,10 @@ if __name__ == '__main__':
         n_crashes    = 0
 
 
-        for linear_std, angular_std in zip(np.linspace(0, 0.15, 5), np.linspace(0, 10 * (np.pi / 180.0), 5)):
-            n_samples   = 200
-            for x in range(n_samples):
+        for linear_std, angular_std in zip(np.linspace(0, args.noise_lin, args.noise_steps), np.linspace(0, args.noise_ang * (np.pi / 180.0), args.noise_steps)):
+            for x in range(args.samples):
                 # Uniformly sample a joint state
                 joint_state = dict(zip(joint_array, np.random.rand(len(joint_array)) * scale + offset))
-                # print('\n'.join(['{:>65}: {} <= {} <= {}'.format(k, l, joint_state[k], u) for k, (l, u) in zip(joint_array, bounds)]))
-                # exit(0)
-                # visualizer.begin_draw_cycle('objects')
-
-                # for k, o in world.named_objects.items():
-                #     if k in true_frames:
-                #         tf = matrix_to_transform(subs(true_frames[k], joint_state))
-                #         o.transform = tf
-                #         visualizer.draw_collision_object('objects', o, r=0.2, b=0)
-
-                # visualizer.render('objects')
-
-                # rospy.sleep(2)
-                # _ = raw_input('Press enter to continue')
 
                 # Generate n noise transforms
                 noise = [t * r for t, r in zip(random_normal_translation(len(frames), 0, linear_std), 
@@ -174,17 +158,6 @@ if __name__ == '__main__':
 
                 # Calculate forward kinematics of frames
                 obs_frames = {k: f.subs(joint_state) * n for (k, f), n in zip(frames.items(), noise)}
-
-                # visualizer.begin_draw_cycle('noise')
-
-                # for k, o in world.named_objects.items():
-                #     if r_alias[k] in obs_frames:
-                #         tf = matrix_to_transform(obs_frames[r_alias[k]])
-                #         o.transform = tf
-                #         visualizer.draw_collision_object('noise', o, r=0.9, g=0, b=0)
-
-                # visualizer.render('noise')
-                # _ = raw_input('Press enter to continue')
 
                 for x, (k, f) in enumerate(obs_frames.items()):
                     update_msg.poses[x].header.frame_id = k
@@ -203,19 +176,6 @@ if __name__ == '__main__':
 
                     time_start = Time.now()
                     tracker.cb_tick(None)
-
-                    # visualizer.begin_draw_cycle('noise')            
-                    # visualizer.begin_draw_cycle('solved')
-
-                    # for k, o in world.named_objects.items():
-                    #     if k in true_frames:
-                    #         tf = matrix_to_transform(subs(true_frames[k], tracker.integrator.state))
-                    #         o.transform = tf
-                    #         visualizer.draw_collision_object('solved', o, r=0, g=0.2, b=1)
-
-                    # visualizer.render()
-                    # _ = raw_input('Press enter to continue')
-                    # exit(0)
 
                     iter_times.append((Time.now() - time_start).to_sec() / (tracker.integrator.current_iteration + 1))
                     n_iter.append(tracker.integrator.current_iteration + 1)
@@ -256,4 +216,6 @@ if __name__ == '__main__':
                     np.max(np.mean(config_delta, 1)),
                     n_crashes))
 
-    df_results.to_csv('tracker_results_n_dof.csv', float_format='%.5f', index=False)
+    print('Total time taken: {} s'.format((Time.now() - total_start).to_sec()))
+
+    df_results.to_csv(args.out, float_format='%.5f', index=False)

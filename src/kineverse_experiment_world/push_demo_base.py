@@ -37,7 +37,7 @@ def generate_push_closing(km, grounding_state, controlled_symbols, eef_pose, obj
         s_neutral_tangent = subs(neutral_tangent, state)
         vis.draw_vector('debug_vecs', s_object_cp, subs(contact_grad, state), r=0, b=0)
         vis.draw_vector('debug_vecs', s_object_cp, subs(active_tangent, state), r=0, b=1)
-        vis.draw_vector('debug_vecs', s_object_cp, s_ortho_vel_vec, r=1, b=0)
+        # vis.draw_vector('debug_vecs', s_object_cp, s_ortho_vel_vec, r=1, b=0)
         vis.render('debug_vecs')
 
     return constraints, geom_distance, coll_world, debug_draw
