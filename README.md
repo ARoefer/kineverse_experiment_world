@@ -35,7 +35,7 @@ Rebuild your workspace and source the `devel/setup.bash` file again so ROS disco
 Running The Demos
 -----------------
 
-The are 
+The are seven demos in this repository. This section explains how to run them.
 
 ### Animated Kinematics
 This demo shows a number of different kinematics implemented in Kineverse and visualized using RVIZ. The demo is a single ROS node and can be run like this:
