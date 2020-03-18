@@ -139,8 +139,6 @@ Use your mouse to orient the robot and to move parts of the kitchen. Observe the
 ### Run Pushing in Simulation
 The final demo in this package is a small behavior that reacts to parts of the kitchen being left open. When it observes one of these parts, it will try to push them shut.
 
-#### PR2
-
 ```bash
 # If its not runing already: ROS master
 roscore
@@ -154,3 +152,12 @@ rosrun kineverse_experiment_world obsessive_demo.py pr2
 # Visualize using RVIZ
 rviz -d `rospack find kineverse_experiment_world`/rviz/sim_pr2.rviz
 ```
+
+### Run Lockbox Demo
+The final demo does not have any visualization. It models the unlocking of a lockbox with six interlocking mechanisms. The result of running the demo is a single plot.
+
+```bash
+rosrun kineverse_experiment_world lockbox_demo.py
+```
+
+The resulting plot will be written to `kineverse_experiment_world/test/plots/lockbox_opening.png`.
