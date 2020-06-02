@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import rospy
+import kineverse.gradients.common_math as cm
 
 from kineverse.gradients.gradient_math      import *
 from kineverse.model.geometry_model         import GeometryModel, RigidBody, Geometry, Frame
@@ -23,8 +24,8 @@ def simple_kinematics(km, vis):
     child_to_parent = translation3(a, 0, 0)
     child_frame     = parent_frame * child_to_parent
 
-    box_parent   = Geometry('prismatic_parent', se.eye(4), 'box', vector3(1.00, 0.08, 0.08))
-    box_child    = Geometry('prismatic_child', se.eye(4), 'box', vector3(0.12, 0.12, 0.12))
+    box_parent   = Geometry('prismatic_parent', cm.eye(4), 'box', vector3(1.00, 0.08, 0.08))
+    box_child    = Geometry('prismatic_child', cm.eye(4), 'box', vector3(0.12, 0.12, 0.12))
     parent_obj   = RigidBody('world', parent_frame, geometry={1: box_parent}, collision={1: box_parent})
     child_obj    = RigidBody('prismatic_parent', child_frame, to_parent=child_to_parent, geometry={1: box_child}, collision={1: box_child})
 
@@ -36,8 +37,8 @@ def simple_kinematics(km, vis):
     child_to_parent = translation3(0,0,0.08) * rotation3_axis_angle(vector3(0,0,1), a)
     child_frame     = parent_frame * child_to_parent
 
-    hinge_parent = Geometry('hinge_parent', se.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/hinge_part_b.obj')
-    hinge_child  = Geometry('hinge_child', se.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/hinge_part_a.obj')
+    hinge_parent = Geometry('hinge_parent', cm.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/hinge_part_b.obj')
+    hinge_child  = Geometry('hinge_child', cm.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/hinge_part_a.obj')
     parent_obj   = RigidBody('world', parent_frame, geometry={1: hinge_parent}, collision={1: hinge_parent})
     child_obj    = RigidBody('hinge_parent', child_frame, to_parent=child_to_parent, geometry={1: hinge_child}, collision={1: hinge_child})
 
@@ -106,9 +107,9 @@ def simple_kinematics(km, vis):
     piston_to_rod   = frame3_axis_angle(vector3(1,0,0), asin(sin(SYM_ROTATION) * 0.05 / 0.15), point3(0,0,0.15))
     piston_frame    = rod_frame * piston_to_rod # translation3(*(rod_frame * point3(0,0,0.15)))
 
-    rotator_geom = Geometry('rotator', se.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/rotator.obj')
-    rod_geom     = Geometry('rod', se.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/connecting_rod.obj')
-    piston_geom  = Geometry('piston', se.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/piston.obj')
+    rotator_geom = Geometry('rotator', cm.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/rotator.obj')
+    rod_geom     = Geometry('rod', cm.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/connecting_rod.obj')
+    piston_geom  = Geometry('piston', cm.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/piston.obj')
     rotator_obj  = RigidBody('world', rotator_frame, to_parent=rotator_frame, geometry={1: rotator_geom}, collision={1: rotator_geom})
     rod_obj      = RigidBody('rotator', rod_frame, to_parent=rod_to_rotator, geometry={1: rod_geom}, collision={1: rod_geom})
     piston_obj   = RigidBody('rod', piston_frame, to_parent=piston_to_rod, geometry={1: piston_geom}, collision={1: piston_geom})
@@ -123,14 +124,14 @@ def simple_kinematics(km, vis):
     head_to_base = translation3(0, -0.006, 0.118) * rotation3_rpy(0.3 * (ay**2) - 0.3, 0, ay)
     head_frame   = base_frame * head_to_base
 
-    geom_head = Geometry('faucet_head', se.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/faucet_handle.obj')
-    geom_base = Geometry('faucet_base', se.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/faucet_base.obj')
+    geom_head = Geometry('faucet_head', cm.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/faucet_handle.obj')
+    geom_base = Geometry('faucet_base', cm.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/faucet_base.obj')
 
     rb_base   = RigidBody('world', base_frame, geometry={0: geom_base}, collision={0: geom_base})
     rb_head   = RigidBody('faucet_base', head_frame, to_parent=head_to_base, geometry={0: geom_head}, collision={0: geom_head})
 
-    water_flow = dot(y_of(head_frame), y_of(base_frame))
-    water_temperature = dot(y_of(head_frame), y_of(base_frame))
+    water_flow = dot(cm.y_of(head_frame), cm.y_of(base_frame))
+    water_temperature = dot(cm.y_of(head_frame), cm.y_of(base_frame))
 
     km.set_data('faucet_base', rb_base)
     km.set_data('faucet_head', rb_head)
@@ -142,9 +143,9 @@ def simple_kinematics(km, vis):
     handle_to_door  = frame3_axis_angle(vector3(1,0,0), a * 0.5 + 0.5 - pi * 0.5, point3(0, 0.37, 0))
     handle_frame    = door_frame * handle_to_door
 
-    compartment_geom = Geometry('compartment', se.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/compartment.obj')
-    door_geom    = Geometry('door', se.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/compartment_door.obj')
-    handle_geom  = Geometry('handle', se.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/compartment_handle.obj')
+    compartment_geom = Geometry('compartment', cm.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/compartment.obj')
+    door_geom    = Geometry('door', cm.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/compartment_door.obj')
+    handle_geom  = Geometry('handle', cm.eye(4), 'mesh', mesh='package://kineverse_experiment_world/meshes/compartment_handle.obj')
     compartment_obj = RigidBody('world', parent_frame, geometry={1: compartment_geom}, collision={1: compartment_geom})
     door_obj        = RigidBody('compartment', door_frame, to_parent=door_to_parent, geometry={1: door_geom}, collision={1: door_geom})
     handle_obj      = RigidBody('door', handle_frame, to_parent=handle_to_door, geometry={1: handle_geom}, collision={1: handle_geom})
@@ -169,24 +170,24 @@ def simple_kinematics(km, vis):
     rot_piston_l = rotation3_axis_angle(unitY, angle_l)
     pb_l_to_parent = mount_l * rot_piston_l
     ph_l_to_pb = translation3(pos_l, 0, 0)
-    pep_l      = pos_of(pb_l_to_parent * ph_l_to_pb)
+    pep_l      = cm.pos_of(pb_l_to_parent * ph_l_to_pb)
 
     pos_r   = 0.125 + b * 0.025
     angle_r = pi + acos((pos_r**2 + mount_offset ** 2 - bridge_length ** 2) / (2 * pos_r * mount_offset))
     rot_piston_r = rotation3_axis_angle(unitY, angle_r)
     pb_r_to_parent = mount_r * rot_piston_r
     ph_r_to_pb = translation3(pos_r, 0, 0)
-    pep_r      = pos_of(pb_r_to_parent * ph_r_to_pb)
+    pep_r      = cm.pos_of(pb_r_to_parent * ph_r_to_pb)
 
-    bar_center = (se.diag(1,0,1,1) * (pep_l + pep_r)) * 0.5
-    bar_offset = bar_center - pos_of(anchor)
-    bar_pitch  = rotation3_axis_angle(-unitY, se.atan2(bar_offset[2], bar_offset[0]))
+    bar_center = (cm.diag(1,0,1,1) * (pep_l + pep_r)) * 0.5
+    bar_offset = bar_center - cm.pos_of(anchor)
+    bar_pitch  = rotation3_axis_angle(-unitY, cm.atan2(bar_offset[2], bar_offset[0]))
     bar_diag   = pep_r - pep_l
     bar_roll   = rotation3_axis_angle(unitX, 
-                                      se.atan2(dot(z_of(bar_pitch), bar_diag), dot(y_of(bar_pitch), bar_diag)))
+                                      cm.atan2(dot(cm.z_of(bar_pitch), bar_diag), dot(cm.y_of(bar_pitch), bar_diag)))
 
 
-    sphere     = Geometry('world', se.eye(4), 'sphere', scale=vector3(0.01, 0.01, 0.01))
+    sphere     = Geometry('world', cm.eye(4), 'sphere', scale=vector3(0.01, 0.01, 0.01))
     thick_box  = Geometry('world', translation3(0.025,0,0), 'box', scale=vector3(0.05, 0.02, 0.02))
     thin_box   = Geometry('world', translation3(-0.05,0,0),  'box', scale=vector3(0.1, 0.01, 0.01))
     bar_box    = Geometry('world', translation3(bridge_length * 0.5, 0, 0),  
@@ -242,12 +243,14 @@ if __name__ == '__main__':
     coll_world = km.get_active_geometry(symbols)
 
     broadcaster = ModelTFBroadcaster_URDF('robot_description', '', km.get_data(''))
+    print('\n  '.join([str(x) for x in sorted(broadcaster.frame_info)]))
 
     last_update = time()
     while not rospy.is_shutdown():
         now = time()
         if now - last_update >= (1.0 / 50.0):
             state = {s: sin(time() + x * 0.1) for x, s in enumerate(symbols)}
+            # print('----\n{}'.format('\n'.join(['{}: {}'.format(s, v) for s, v in state.items()])))
             state[NULL_SYMBOL] = 0
             state[SYM_ROTATION] = now
 

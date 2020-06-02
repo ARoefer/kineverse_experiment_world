@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 
-from kineverse.gradients.gradient_math     import point3, vector3, translation3, frame3_axis_angle, Position, se
+import kineverse.gradients.common_math as cm
+
+from kineverse.gradients.gradient_math     import point3, vector3, translation3, frame3_axis_angle, Position
 from kineverse.model.geometry_model        import GeometryModel, RigidBody, Geometry, Path
 from kineverse.operations.basic_operations import CreateComplexObject as OP_CCO, \
                                                   CreateSingleValue   as OP_CSV
@@ -10,11 +12,11 @@ from kineverse.operations.special_kinematics import SetBallJoint      as OP_SBJ
 if __name__ == '__main__':
     km = GeometryModel()
 
-    geom_head = Geometry(Path('head'), se.eye(4), 'mesh', mesh='package://kineverse_experiment_world/urdf/faucet_head.obj')
-    rb_head   = RigidBody(Path('world'), se.eye(4), geometry={0: geom_head}, collision={0: geom_head})
+    geom_head = Geometry(Path('head'), cm.eye(4), 'mesh', mesh='package://kineverse_experiment_world/urdf/faucet_head.obj')
+    rb_head   = RigidBody(Path('world'), cm.eye(4), geometry={0: geom_head}, collision={0: geom_head})
 
-    geom_base = Geometry(Path('base'), se.eye(4), 'mesh', mesh='package://kineverse_experiment_world/urdf/faucet_base.obj')
-    rb_base   = RigidBody(Path('world'), se.eye(4), geometry={0: geom_base}, collision={0: geom_base})
+    geom_base = Geometry(Path('base'), cm.eye(4), 'mesh', mesh='package://kineverse_experiment_world/urdf/faucet_base.obj')
+    rb_base   = RigidBody(Path('world'), cm.eye(4), geometry={0: geom_base}, collision={0: geom_base})
 
     km.apply_operation('create base', OP_CCO(Path('base'), rb_base))
     km.apply_operation('create head', OP_CCO(Path('head'), rb_head))

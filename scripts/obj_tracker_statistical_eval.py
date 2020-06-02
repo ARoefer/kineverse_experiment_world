@@ -101,8 +101,8 @@ if __name__ == '__main__':
 
 
     columns = ['DoF', 'Poses', 'Linear SD', 'Angular SD', 'Mean Error', 'SD Error', 'Min Error', 'Max Error', 'Mean Iterations', 'Iteration Duration']
-    df_results = pd.DataFrame(columns=columns)
-    visualizer = ROSBPBVisualizer('/tracker_vis', 'world')
+    result_rows = []
+    visualizer  = ROSBPBVisualizer('/tracker_vis', 'world')
 
     last_n_dof = 0
 
@@ -189,17 +189,16 @@ if __name__ == '__main__':
                     break
 
 
-            df_results = df_results.append(pd.DataFrame(data=[[len(joint_array),
-                                                               len(frames),
-                                                               linear_std, 
-                                                               angular_std, 
-                                                               np.mean(np.mean(config_delta, 1)), 
-                                                               np.std(np.mean(config_delta, 1)), 
-                                                               np.min(np.mean(config_delta, 1)), 
-                                                               np.max(np.mean(config_delta, 1)),
-                                                               np.mean(n_iter),
-                                                               np.mean(iter_times)]], 
-                                                           columns=columns), ignore_index=True)
+            result_rows.append([len(joint_array),
+                                len(frames),
+                                linear_std, 
+                                angular_std, 
+                                np.mean(np.mean(config_delta, 1)), 
+                                np.std(np.mean(config_delta, 1)), 
+                                np.min(np.mean(config_delta, 1)), 
+                                np.max(np.mean(config_delta, 1)),
+                                np.mean(n_iter),
+                                np.mean(iter_times)])
 
             print('Mean s/iteration: {}\n'
                   'Mean n iter: {}\n'
@@ -218,4 +217,5 @@ if __name__ == '__main__':
 
     print('Total time taken: {} s'.format((Time.now() - total_start).to_sec()))
 
+    df_results = pd.DataFrame(columns=columns, data=result_rows)
     df_results.to_csv(args.out, float_format='%.5f', index=False)

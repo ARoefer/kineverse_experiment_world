@@ -3,8 +3,9 @@ from collections import namedtuple
 
 from multiprocessing import RLock
 
-from kineverse.gradients.gradient_math      import se,                  \
-                                                   rotation3_axis_angle,\
+import kineverse.gradients.common_math as cm
+
+from kineverse.gradients.gradient_math      import rotation3_axis_angle,\
                                                    frame3_axis_angle,   \
                                                    frame3_quaternion,   \
                                                    norm,                \
@@ -118,7 +119,7 @@ class TrackerNode(object):
                 if self.visualizer is not None:
                     poses = [t.pose.subs(self.integrator.state) for t in self.tracked_poses.values()]
                     self.visualizer.begin_draw_cycle('obs_points')
-                    self.visualizer.draw_points('obs_points', se.eye(4), 0.1, [pos_of(p) for p in poses if len(p.free_symbols) == 0])
+                    self.visualizer.draw_points('obs_points', cm.eye(4), 0.1, [pos_of(p) for p in poses if len(p.free_symbols) == 0])
                     # self.visualizer.draw_poses('obs_points', se.eye(4), 0.1, 0.02, [p for p in poses if len(p.free_symbols) == 0])
                     self.visualizer.render('obs_points')
 
