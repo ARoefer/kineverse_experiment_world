@@ -1,3 +1,5 @@
+import kineverse.gradients.common_math as cm
+
 from kineverse.gradients.gradient_math import *
 from kineverse.model.geometry_model    import contact_geometry, \
                                               generate_contact_model
@@ -11,11 +13,13 @@ def generate_push_closing(km, grounding_state, controlled_symbols, eef_pose, obj
     robot_cp, object_cp, contact_normal = contact_geometry(eef_pose, obj_pose, eef_path, obj_path)
     object_cp     = object_cp - contact_normal * cp_offset
     geom_distance = dot(contact_normal, robot_cp - object_cp)
-    coll_world    = km.get_active_geometry(geom_distance.free_symbols)
+    coll_world    = km.get_active_geometry(cm.free_symbols(geom_distance))
 
     # GEOMETRY NAVIGATION LOGIC
     # This is exploiting task knowledge which makes this function inflexible.
-    contact_grad    = sum([sign(-grounding_state[s]) * vector3(*[x.diff(s) for x in object_cp[:3]]) for s in obj_pose.free_symbols], vector3(0,0,0))
+    contact_grad    = sum([sign(-grounding_state[s]) * vector3(cm.diff(object_cp[0], s), 
+                                                               cm.diff(object_cp[1], s), 
+                                                               cm.diff(object_cp[2], s)) for s in cm.free_symbols(obj_pose)], vector3(0,0,0))
     neutral_tangent = cross(contact_grad, contact_normal)
     active_tangent  = cross(neutral_tangent, contact_normal)
 
@@ -28,8 +32,8 @@ def generate_push_closing(km, grounding_state, controlled_symbols, eef_pose, obj
         geom_distance = norm(object_cp + active_tangent * norm(neutral_tangent) - robot_cp)
 
     # PUSH CONSTRAINT GENERATION
-    constraints = km.get_constraints_by_symbols(geom_distance.free_symbols.union(controlled_symbols))
-    constraints.update(generate_contact_model(robot_cp, controlled_symbols, object_cp, contact_normal, obj_pose.free_symbols))
+    constraints = km.get_constraints_by_symbols(cm.free_symbols(geom_distance).union(controlled_symbols))
+    constraints.update(generate_contact_model(robot_cp, controlled_symbols, object_cp, contact_normal, cm.free_symbols(obj_pose)))
 
     def debug_draw(vis, state, cmd):
         vis.begin_draw_cycle('debug_vecs')

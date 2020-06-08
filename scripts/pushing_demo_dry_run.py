@@ -144,11 +144,11 @@ if __name__ == '__main__':
     # GOAL DEFINITION
     eef_path = Path('{}/links/gripper_link/pose'.format(robot)) if robot != 'pr2' else Path('pr2/links/r_gripper_r_finger_tip_link/pose')
     eef_pose = km.get_data(eef_path)
-    eef_pos  = pos_of(eef_pose)
+    eef_pos  = cm.pos_of(eef_pose)
 
     cam_pose    = km.get_data('{}/links/head_camera_link/pose'.format(robot)) if robot != 'pr2' else km.get_data('pr2/links/head_mount_link/pose')
-    cam_pos     = pos_of(cam_pose)
-    cam_forward = x_of(cam_pose)
+    cam_pos     = cm.pos_of(cam_pose)
+    cam_forward = cm.x_of(cam_pose)
     cam_to_eef  = eef_pos - cam_pos
 
     parts = ['iai_fridge_door_handle', #]
@@ -168,7 +168,7 @@ if __name__ == '__main__':
     # QP CONFIGURTION
     base_joint    = km.get_data('{}/joints/to_world'.format(robot))
     base_link     = km.get_data('{}/links/{}'.format(robot, urdf_model.get_root())) 
-    joint_symbols = [j.position for j in km.get_data('{}/joints'.format(robot)).values() if hasattr(j, 'position') and type(j.position) is Symbol]
+    joint_symbols = [j.position for j in km.get_data('{}/joints'.format(robot)).values() if hasattr(j, 'position') and cm.is_symbol(j.position)]
     
     robot_controlled_symbols = {DiffSymbol(j) for j in joint_symbols}
     integration_rules        = None
@@ -193,9 +193,9 @@ if __name__ == '__main__':
         kitchen_path = Path('kitchen/links/{}/pose'.format(part))
         obj_pose = km.get_data(kitchen_path)
 
-        controlled_symbols = robot_controlled_symbols.union({DiffSymbol(j) for j in obj_pose.free_symbols})
+        controlled_symbols = robot_controlled_symbols.union({DiffSymbol(j) for j in cm.free_symbols(obj_pose)})
         
-        start_state = {s: 0.4 for s in obj_pose.free_symbols}
+        start_state = {s: 0.4 for s in cm.free_symbols(obj_pose)}
 
         constraints, geom_distance, coll_world, debug_draw = generate_push_closing(km, 
                                                                                    start_state, 
@@ -206,8 +206,8 @@ if __name__ == '__main__':
                                                                                    kitchen_path[:-1],
                                                                                    use_geom_circulation)
 
-        start_state.update({s: 0.0 for s in coll_world.free_symbols})
-        start_state.update({s: 0.4 for s in obj_pose.free_symbols})
+        start_state.update({s: 0.0 for s in cm.free_symbols(coll_world)})
+        start_state.update({s: 0.4 for s in cm.free_symbols(obj_pose)})
         controlled_values, constraints = generate_controlled_values(constraints, controlled_symbols)
         controlled_values = depth_weight_controlled_values(km, controlled_values, exp_factor=1.1)
         
@@ -216,13 +216,13 @@ if __name__ == '__main__':
           controlled_values[str(base_joint.r_wheel_vel)].weight = 0.001 
 
         # CAMERA STUFF
-        cam_to_obj = pos_of(obj_pose) - cam_pos
+        cam_to_obj = cm.pos_of(obj_pose) - cam_pos
         look_goal  = 1 - (dot(cam_to_obj, cam_forward) / norm(cam_to_obj))
 
         # GOAL CONSTAINT GENERATION
         goal_constraints = {'reach_point': PIDC(geom_distance, geom_distance, 1, k_i=0.01),
                             'look_at_obj':   SC(   -look_goal,    -look_goal, 1, look_goal)}
-        goal_constraints.update({'open_object_{}'.format(x): PIDC(s, s, 1) for x, s in enumerate(obj_pose.free_symbols)})
+        goal_constraints.update({'open_object_{}'.format(x): PIDC(s, s, 1) for x, s in enumerate(cm.free_symbols(obj_pose))})
 
         in_contact = less_than(geom_distance, 0.01)
         
@@ -232,7 +232,7 @@ if __name__ == '__main__':
           start_state.update({Position(Path(robot) + (k,)): v  for k, v in tucked_arm.items()})
 
         if args.vis_plan:
-            qpb = GQPB(coll_world, constraints, goal_constraints, controlled_values, visualizer=visualizer)
+            qpb = GQPB(coll_world, constraints, goal_constraints, controlled_values) #, visualizer=visualizer)
         else:
             qpb = GQPB(coll_world, constraints, goal_constraints, controlled_values) #, visualizer=visualizer)
         qpb._cb_draw = debug_draw
@@ -262,7 +262,7 @@ if __name__ == '__main__':
 
         # DRAW
         print('Drawing recorders')
-        draw_recorders([filter_contact_symbols(integrator.recorder, integrator.qp_builder), integrator.sym_recorder], 4.0/9.0, 8, 4).savefig('{}/{}_sandbox_{}_plots.png'.format(plot_dir, robot, part))
+        # draw_recorders([filter_contact_symbols(integrator.recorder, integrator.qp_builder), integrator.sym_recorder], 4.0/9.0, 8, 4).savefig('{}/{}_sandbox_{}_plots.png'.format(plot_dir, robot, part))
         if PANDA_LOGGING:
             rec_w, rec_b, rec_c, recs = convert_qp_builder_log(integrator.qp_builder)
             draw_recorders([rec_b, rec_c] + [r for _, r in sorted(recs.items())], 1, 8, 4).savefig('{}/{}_sandbox_{}_constraints.png'.format(plot_dir, robot, part))
