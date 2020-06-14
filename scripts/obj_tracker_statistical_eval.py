@@ -9,26 +9,29 @@ from kineverse_experiment_world.tracking_node import TrackerNode
 from kineverse_experiment_world.msg    import PoseStampedArray as PSAMsg
 from kineverse.msg                     import ValueMap         as ValueMapMsg
 
-from kineverse.bpb_wrapper import pb, create_object, create_cube_shape, create_sphere_shape, create_cylinder_shape, create_compound_shape, load_convex_mesh_shape, matrix_to_transform
-from kineverse.motion.min_qp_builder   import QPSolverException
-from kineverse.gradients.gradient_math import Symbol, subs
-from kineverse.visualization.plotting  import convert_qp_builder_log, draw_recorders
-from kineverse.time_wrapper            import Time
-from kineverse.type_sets               import is_symbolic
-from kineverse.utils                   import res_pkg_path, real_quat_from_matrix
+from kineverse.model.paths                  import Path
+from kineverse.operations.urdf_operations   import load_urdf
+from kineverse.motion.min_qp_builder        import QPSolverException
+from kineverse.gradients.gradient_math      import Symbol, subs, cm
+from kineverse.visualization.plotting       import convert_qp_builder_log, draw_recorders
+from kineverse.time_wrapper                 import Time
+from kineverse.type_sets                    import is_symbolic
+from kineverse.utils                        import res_pkg_path, real_quat_from_matrix
 from kineverse.visualization.bpb_visualizer import ROSBPBVisualizer
+from kineverse.urdf_fix                     import urdf_filler
 
 from kineverse_experiment_world.tracking_node import TrackerNode
 from kineverse_experiment_world.utils         import random_normal_translation, random_rot_normal
 
 from geometry_msgs.msg import PoseStamped as PoseStampedMsg
 
+from urdf_parser_py.urdf import URDF
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Benchmark for the simple object tracker.')
     parser.add_argument('--step', '-d', type=float, default=1, help='Size of the integration step. 0 < s < 1')
     parser.add_argument('--max-iter', '-mi', type=int, default=10, help='Maximum number of iterations per observation.')
-    parser.add_argument('--samples', '-s', type=int, default=200, help='Number of operations to generate per configuration.')
+    parser.add_argument('--samples', '-s', type=int, default=200, help='Number of observations to generate per configuration.')
     parser.add_argument('--noise-lin', '-nl', type=float, default=0.15, help='Maximum linear noise.')
     parser.add_argument('--noise-ang', '-na', type=float, default=10.0, help='Maximum angular noise in degrees.')
     parser.add_argument('--noise-steps', '-ns', type=int, default=5, help='Number of steps from lowest to highest noise.')
@@ -37,6 +40,15 @@ if __name__ == '__main__':
 
     rospy.init_node('kineverse_tracking_node')
     tracker = TrackerNode('/tracked/state', '/pose_obs', args.step, args.max_iter, use_timer=False)
+
+    with open(res_pkg_path('package://iai_kitchen/urdf_obj/IAI_kitchen.urdf'), 'r') as urdf_file:
+        urdf_kitchen_str = urdf_file.read()
+
+    kitchen_model = urdf_filler(URDF.from_xml_string(urdf_kitchen_str))
+    load_urdf(tracker.km_client, Path('iai_oven_area'), kitchen_model)
+
+    tracker.km_client.clean_structure()
+    tracker.km_client.dispatch_events()
 
     groups = [[('iai_oven_area/links/room_link', 'iai_oven_area/room_link'),
                ('iai_oven_area/links/fridge_area', 'iai_oven_area/fridge_area'),
@@ -114,7 +126,7 @@ if __name__ == '__main__':
 
         constraints = tracker.km_client.get_constraints_by_symbols(tracker.joints)
 
-        constraints = {c.expr: [float(subs(c.lower, {c.expr: 0})), float(subs(c.upper, {c.expr: 0}))] for k, c in constraints.items() if type(c.expr) == Symbol and not is_symbolic(subs(c.lower, {c.expr: 0})) and not is_symbolic(subs(c.upper, {c.expr: 0}))}
+        constraints = {c.expr: [float(subs(c.lower, {c.expr: 0})), float(subs(c.upper, {c.expr: 0}))] for k, c in constraints.items() if cm.is_symbol(c.expr) and not is_symbolic(subs(c.lower, {c.expr: 0})) and not is_symbolic(subs(c.upper, {c.expr: 0}))}
 
         joint_array = [s for _, s in sorted([(str(s), s) for s in tracker.joints])]
         if len(joint_array) == last_n_dof:
@@ -122,7 +134,7 @@ if __name__ == '__main__':
 
         last_n_dof = len(joint_array)
 
-        world  = tracker.km_client.km.get_active_geometry(set(joint_array))
+        world  = tracker.km_client.get_active_geometry(set(joint_array))
 
 
         bounds = np.array([constraints[s] if s in constraints else 
@@ -147,23 +159,24 @@ if __name__ == '__main__':
         n_crashes    = 0
 
 
-        for linear_std, angular_std in zip(np.linspace(0, args.noise_lin, args.noise_steps), np.linspace(0, args.noise_ang * (np.pi / 180.0), args.noise_steps)):
+        for linear_std, angular_std in zip(np.linspace(0, args.noise_lin, args.noise_steps), 
+                                           np.linspace(0, args.noise_ang * (np.pi / 180.0), args.noise_steps)):
             for x in range(args.samples):
                 # Uniformly sample a joint state
                 joint_state = dict(zip(joint_array, np.random.rand(len(joint_array)) * scale + offset))
 
                 # Generate n noise transforms
-                noise = [t * r for t, r in zip(random_normal_translation(len(frames), 0, linear_std), 
-                                               random_rot_normal(len(frames), 0, angular_std))]
+                noise = [cm.to_numpy(t * r) for t, r in zip(random_normal_translation(len(frames), 0, linear_std),
+                                                            random_rot_normal(len(frames), 0, angular_std))]
 
                 # Calculate forward kinematics of frames
-                obs_frames = {k: f.subs(joint_state) * n for (k, f), n in zip(frames.items(), noise)}
+                obs_frames = {k: subs(f, joint_state).dot(n) for (k, f), n in zip(frames.items(), noise)}
 
                 for x, (k, f) in enumerate(obs_frames.items()):
                     update_msg.poses[x].header.frame_id = k
-                    update_msg.poses[x].pose.position.x = f[0, 3]
-                    update_msg.poses[x].pose.position.y = f[1, 3]
-                    update_msg.poses[x].pose.position.z = f[2, 3]
+                    update_msg.poses[x].pose.position.x = float(f[0, 3])
+                    update_msg.poses[x].pose.position.y = float(f[1, 3])
+                    update_msg.poses[x].pose.position.z = float(f[2, 3])
 
                     qx, qy, qz, qw = real_quat_from_matrix(f)
                     update_msg.poses[x].pose.orientation.x = qx

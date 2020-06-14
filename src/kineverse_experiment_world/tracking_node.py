@@ -9,12 +9,10 @@ from kineverse.gradients.gradient_math      import rotation3_axis_angle,\
                                                    frame3_axis_angle,   \
                                                    frame3_quaternion,   \
                                                    norm,                \
-                                                   rot_of,              \
-                                                   pos_of,              \
                                                    vector3,             \
                                                    Position,            \
                                                    subs
-from kineverse.gradients.diff_logic         import get_diff_symbol, erase_type
+from kineverse.gradients.diff_logic         import DiffSymbol, erase_type
 from kineverse.model.paths                  import Path
 from kineverse.model.geometry_model         import GeometryModel
 from kineverse.motion.min_qp_builder        import SoftConstraint as SC,   \
@@ -35,7 +33,7 @@ TrackerEntry = namedtuple('TrackerEntry', ['pose', 'update_state', 'model_cb'])
 
 class TrackerNode(object):
     def __init__(self, js_topic, obs_topic, integration_factor=0.05, iterations=30, visualize=False, use_timer=True):
-        self.km_client = ModelClient(GeometryModel)
+        self.km_client = GeometryModel() # ModelClient(GeometryModel)
 
         self._js_msg             = ValueMapMsg()
         self._integration_factor = integration_factor
@@ -83,7 +81,11 @@ class TrackerNode(object):
                 self.tracked_poses[model_path] = TrackerEntry(frame3_quaternion(*syms), rf, process_model_update)
                 self._unintialized_poses.add(model_path)
 
-                self.km_client.register_on_model_changed(Path(model_path), process_model_update)
+                if type(self.km_client) == ModelClient:
+                    self.km_client.register_on_model_changed(Path(model_path), process_model_update)
+                else:
+                    process_model_update(self.km_client.get_data(model_path))
+
 
             if start_tick:
                 self.timer = rospy.Timer(rospy.Duration(1.0 / 50), self.cb_tick)
@@ -142,26 +144,33 @@ class TrackerNode(object):
                 align_rotation = '{} align rotation'.format(str_path)
                 align_position = '{} align position'.format(str_path)
                 if model is not None:
-                    if len(model.pose.free_symbols) > 0:
+                    m_free_symbols = cm.free_symbols(model.pose)
+                    if len(m_free_symbols) > 0:
                         te = self.tracked_poses[str_path]
 
-                        self.joints |= model.pose.free_symbols
+                        self.joints |= m_free_symbols
                         self.joint_aliases = {s: str(s) for s in self.joints}
 
-                        r_dist = norm(rot_of(model.pose) - rot_of(te.pose))
+                        r_dist = norm(cm.rot_of(model.pose) - cm.rot_of(te.pose))
                         self.soft_constraints[align_rotation] = SC(-r_dist, -r_dist, 1, r_dist)
                     
-                        dist = norm(pos_of(model.pose) - pos_of(te.pose))
+                        # print(align_position)
+                        # print(model.pose)
+                        dist = norm(cm.pos_of(model.pose) - cm.pos_of(te.pose))
+                        # print('Distance expression:\n{}'.format(dist))
+                        # print('Distance expression symbol overlap:\n{}'.format(m_free_symbols.intersection(cm.free_symbols(dist))))
+                        # for s in m_free_symbols:
+                        #     print('Diff w.r.t {}:\n{}'.format(s, cm.diff(dist, s)))
                         self.soft_constraints[align_position] = SC(-dist, -dist, 1, dist)
                         self.generate_opt_problem()
 
                         # Avoid crashes due to insufficient perception data. This is not fully correct.
                         if str_path in self._unintialized_poses:
                             state = self.integrator.state.copy() if self.integrator is not None else {}
-                            state.update({s: 0.0 for s in model.pose.free_symbols if s not in state})
-                            null_pose = subs(model.pose, state)
-                            pos       = pos_of(null_pose)
-                            quat      = real_quat_from_matrix(rot_of(null_pose))
+                            state.update({s: 0.0 for s in m_free_symbols if s not in state})
+                            null_pose = cm.subs(model.pose, state)
+                            pos       = cm.pos_of(null_pose)
+                            quat      = real_quat_from_matrix(cm.rot_of(null_pose))
                             msg       = PoseMsg()
                             msg.position.x = pos[0]
                             msg.position.y = pos[1]
@@ -187,14 +196,14 @@ class TrackerNode(object):
 
     def generate_opt_problem(self):
         joint_symbols    = self.joints
-        opt_symbols      = {get_diff_symbol(j) for j in joint_symbols}
+        opt_symbols      = {DiffSymbol(j) for j in joint_symbols}
         hard_constraints = self.km_client.get_constraints_by_symbols(joint_symbols | opt_symbols)
 
         controlled_values, hard_constraints = generate_controlled_values(hard_constraints, opt_symbols)
         for mp in self._unintialized_poses:
             state = self.integrator.state if self.integrator is not None else {}
             te    = self.tracked_poses[mp]
-            state.update({s: 0.0 for s in te.pose})
+            state.update({s: 0.0 for s in cm.free_symbols(te.pose)})
 
         state = {} if self.integrator is None else self.integrator.state
         self.integrator = CommandIntegrator(TQPB(hard_constraints, self.soft_constraints, controlled_values), start_state=state)
