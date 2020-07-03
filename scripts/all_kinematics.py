@@ -130,8 +130,8 @@ def simple_kinematics(km, vis):
     rb_base   = RigidBody('world', base_frame, geometry={0: geom_base}, collision={0: geom_base})
     rb_head   = RigidBody('faucet_base', head_frame, to_parent=head_to_base, geometry={0: geom_head}, collision={0: geom_head})
 
-    water_flow = dot(cm.y_of(head_frame), cm.y_of(base_frame))
-    water_temperature = dot(cm.y_of(head_frame), cm.y_of(base_frame))
+    water_flow = dot_product(cm.y_of(head_frame), cm.y_of(base_frame))
+    water_temperature = dot_product(cm.y_of(head_frame), cm.y_of(base_frame))
 
     km.set_data('faucet_base', rb_base)
     km.set_data('faucet_head', rb_head)
@@ -184,7 +184,7 @@ def simple_kinematics(km, vis):
     bar_pitch  = rotation3_axis_angle(-unitY, cm.atan2(bar_offset[2], bar_offset[0]))
     bar_diag   = pep_r - pep_l
     bar_roll   = rotation3_axis_angle(unitX, 
-                                      cm.atan2(dot(cm.z_of(bar_pitch), bar_diag), dot(cm.y_of(bar_pitch), bar_diag)))
+                                      cm.atan2(dot_product(cm.z_of(bar_pitch), bar_diag), dot_product(cm.y_of(bar_pitch), bar_diag)))
 
 
     sphere     = Geometry('world', cm.eye(4), 'sphere', scale=vector3(0.01, 0.01, 0.01))

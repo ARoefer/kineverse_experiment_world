@@ -26,7 +26,8 @@ from kineverse.operations.special_kinematics       import create_diff_drive_join
                                                           create_omnibase_joint_with_symbols, \
                                                           DiffDriveJoint
 from kineverse.time_wrapper                        import Time
-from kineverse.urdf_fix                            import urdf_filler
+from kineverse.urdf_fix                            import urdf_filler,          \
+                                                          hacky_urdf_parser_fix
 from kineverse.utils                               import res_pkg_path
 from kineverse.visualization.bpb_visualizer        import ROSBPBVisualizer
 from kineverse.visualization.plotting              import draw_recorders,  \
@@ -79,6 +80,7 @@ def str2bool(v):
 if __name__ == '__main__':
     rospy.init_node('kineverse_sandbox')
 
+    # Terminal args
     parser = argparse.ArgumentParser(description='Plans motions for closing doors and drawers in the IAI kitchen environment using various robots.')
     parser.add_argument('--robot', '-r', default='pr2', help='Name of the robot to use. [ pr2 | fetch ]')
     parser.add_argument('--omni', type=str2bool, default=True, help='To use an omnidirectional base or not.')
@@ -92,19 +94,21 @@ if __name__ == '__main__':
 
     plot_dir = res_pkg_path('package://kineverse/test/plots')
 
+    # Loading of models
     if robot != 'pr2':
         with open(res_pkg_path('package://{r}_description/robots/{r}.urdf'.format(r=robot)), 'r') as urdf_file:
-            urdf_str = urdf_file.read()
+            urdf_str = hacky_urdf_parser_fix(urdf_file.read())
     else:
         with open(res_pkg_path('package://iai_pr2_description/robots/pr2_calibrated_with_ft2.xml'), 'r') as urdf_file:
-            urdf_str = urdf_file.read()
+            urdf_str = hacky_urdf_parser_fix(urdf_file.read())
 
     with open(res_pkg_path('package://iai_kitchen/urdf_obj/IAI_kitchen.urdf'), 'r') as urdf_file:
-        urdf_kitchen_str = urdf_file.read() 
+        urdf_kitchen_str = hacky_urdf_parser_fix(urdf_file.read())
 
     urdf_model    = urdf_filler(URDF.from_xml_string(urdf_str))
     kitchen_model = urdf_filler(URDF.from_xml_string(urdf_kitchen_str))
     
+    # 
     traj_pup   = rospy.Publisher('/{}/commands/joint_trajectory'.format(urdf_model.name), JointTrajectoryMsg, queue_size=1)
     kitchen_traj_pup = rospy.Publisher('/{}/commands/joint_trajectory'.format(kitchen_model.name), JointTrajectoryMsg, queue_size=1)
 
@@ -117,6 +121,7 @@ if __name__ == '__main__':
     km.clean_structure()
     km.apply_operation_before('create world', 'create {}'.format(robot), CreateComplexObject(Path('world'), Frame('')))
 
+    # Insert base to world kinematic
     if robot == 'pr2' or use_omni:
         base_op = create_omnibase_joint_with_symbols(Path('world/pose'), 
                                                    Path('{}/links/{}/pose'.format(robot, urdf_model.get_root())),
@@ -134,6 +139,7 @@ if __name__ == '__main__':
     km.clean_structure()
     km.dispatch_events()
 
+    # Visualization of the trajectory
     visualizer = ROSBPBVisualizer('/vis_pushing_demo', base_frame='world')
     traj_vis   = TrajectoryVisualizer(visualizer)
 
@@ -185,6 +191,8 @@ if __name__ == '__main__':
     else:
         robot_controlled_symbols |= {get_diff(x) for x in [base_joint.x_pos, base_joint.y_pos, base_joint.a_pos]}
     
+    print('\n'.join([str(s) for s in robot_controlled_symbols]))
+
     n_iter    = []
     total_dur = []
 
@@ -197,6 +205,7 @@ if __name__ == '__main__':
         
         start_state = {s: 0.4 for s in cm.free_symbols(obj_pose)}
 
+        # Generate push problem
         constraints, geom_distance, coll_world, debug_draw = generate_push_closing(km, 
                                                                                    start_state, 
                                                                                    controlled_symbols,
@@ -217,7 +226,7 @@ if __name__ == '__main__':
 
         # CAMERA STUFF
         cam_to_obj = cm.pos_of(obj_pose) - cam_pos
-        look_goal  = 1 - (dot(cam_to_obj, cam_forward) / norm(cam_to_obj))
+        look_goal  = 1 - (dot_product(cam_to_obj, cam_forward) / norm(cam_to_obj))
 
         # GOAL CONSTAINT GENERATION
         goal_constraints = {'reach_point': PIDC(geom_distance, geom_distance, 1, k_i=0.01),
@@ -232,7 +241,7 @@ if __name__ == '__main__':
           start_state.update({Position(Path(robot) + (k,)): v  for k, v in tucked_arm.items()})
 
         if args.vis_plan:
-            qpb = GQPB(coll_world, constraints, goal_constraints, controlled_values) #, visualizer=visualizer)
+            qpb = GQPB(coll_world, constraints, goal_constraints, controlled_values, visualizer=visualizer)
         else:
             qpb = GQPB(coll_world, constraints, goal_constraints, controlled_values) #, visualizer=visualizer)
         qpb._cb_draw = debug_draw

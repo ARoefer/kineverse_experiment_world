@@ -131,7 +131,7 @@ class ObsessiveObjectCloser(object):
         # CREATE TAXI CONSTRAINTS
         camera_o_z = x_of(self.robot_camera.pose)[2]
         dist_start_location = norm(self.waiting_location - pos_of(self.base_link.pose))
-        angular_alignment   = dot(self.waiting_direction, self.base_link.pose * vector3(1,0,0))
+        angular_alignment   = dot_product(self.waiting_direction, self.base_link.pose * vector3(1,0,0))
 
 
         self.taxi_constraints = {'to_position': SC(-dist_start_location, -dist_start_location, 1, dist_start_location),
@@ -251,7 +251,7 @@ class ObsessiveObjectCloser(object):
         tucking_constraints.update(self.taxi_constraints)
 
         cam_to_poi = self.poi - pos_of(self.robot_camera.pose)
-        lookat_dot = 1 - dot(self.robot_camera.pose * vector3(1,0,0), cam_to_poi) / norm(cam_to_poi)
+        lookat_dot = 1 - dot_product(self.robot_camera.pose * vector3(1,0,0), cam_to_poi) / norm(cam_to_poi)
         tucking_constraints['sweeping gaze'] = SC(-lookat_dot * 5, -lookat_dot * 5, 1, lookat_dot)
 
         symbols = set()
@@ -309,7 +309,7 @@ class ObsessiveObjectCloser(object):
         print('\n'.join(sorted([str(s) for s in geom_distance.free_symbols])))
 
         cam_to_obj = pos_of(obj_pose) - pos_of(self.robot_camera.pose)
-        lookat_dot = 1 - dot(self.robot_camera.pose * vector3(1,0,0), cam_to_obj) / norm(cam_to_obj)
+        lookat_dot = 1 - dot_product(self.robot_camera.pose * vector3(1,0,0), cam_to_obj) / norm(cam_to_obj)
 
         soft_constraints = {'reach {}'.format(self._current_target): PIDC(geom_distance, geom_distance, 1, k_i=0.02),
                             'close {}'.format(self._current_target): PIDC(target_symbol, target_symbol, 1, k_i=0.06),

@@ -12,7 +12,7 @@ def generate_push_closing(km, grounding_state, controlled_symbols, eef_pose, obj
     # CONTACT GEOMETRY
     robot_cp, object_cp, contact_normal = contact_geometry(eef_pose, obj_pose, eef_path, obj_path)
     object_cp     = object_cp - contact_normal * cp_offset
-    geom_distance = dot(contact_normal, robot_cp - object_cp)
+    geom_distance = dot_product(contact_normal, robot_cp - object_cp)
     coll_world    = km.get_active_geometry(cm.free_symbols(geom_distance))
 
     # GEOMETRY NAVIGATION LOGIC

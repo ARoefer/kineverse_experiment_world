@@ -21,9 +21,10 @@ def random_rot_uniform(n_rots):
     r_z_points = np_sphere_sampling(n_rots)
     x_angles   = np.arccos(r_z_points[:, 2]).reshape((n_rots, 1))
     z_angles   = np.arctan2(r_z_points[:, 1], r_z_points[:, 0]).reshape((n_rots, 1))
-    return [rotation3_axis_angle([0,0,1], r_z) * 
-            rotation3_axis_angle([1,0,0], r_x) * 
-            rotation3_axis_angle([0,0,1], r_t) for r_t, r_x, r_z in np.hstack((r_theta, x_angles, z_angles))]
+    return [dot(rotation3_axis_angle([0,0,1], r_z), 
+                rotation3_axis_angle([1,0,0], r_x), 
+                rotation3_axis_angle([0,0,1], r_t)) for r_t, r_x, r_z 
+                                                    in np.hstack((r_theta, x_angles, z_angles))]
 
 
 # Generates rotations about uniformly sampled axes

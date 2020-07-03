@@ -56,7 +56,7 @@ def bpb():
 
     robot_parts = {n: o for n, o in coll_world.named_objects.items() if n[:4] == 'pr2/'}
 
-    batch = {o: 5.0 for o in robot_parts.values()}
+    batch = {o: 2.0 for o in robot_parts.values()}
 
     print('Benchmarking by querying distances for {} objects. Total object count: {}.\n'.format(len(batch), len(coll_world.names)))
 
@@ -91,5 +91,5 @@ def bpb():
 
 
 if __name__ == '__main__':
-    # bpb()
-    pybullet()
+    bpb()
+    # pybullet()

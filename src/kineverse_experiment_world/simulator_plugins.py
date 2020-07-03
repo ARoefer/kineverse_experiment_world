@@ -74,7 +74,7 @@ class PoseObservationPublisher(SimulatorPlugin):
                     obj_pos = gm.point3(*pose.position)
                     c2o  = obj_pos - gm.pos_of(camera_frame)
                     dist = gm.norm(c2o)
-                    if dist < self.far and dist > self.near and gm.dot(c2o, gm.x_of(camera_frame)) > gm.cos(self.fov * 0.5) * dist:
+                    if dist < self.far and dist > self.near and gm.dot_product(c2o, gm.x_of(camera_frame)) > gm.cos(self.fov * 0.5) * dist:
 
 
                         noise = 2 ** (self.noise_exp * dist) - 1

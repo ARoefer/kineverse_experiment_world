@@ -12,7 +12,7 @@ from kineverse.msg                     import ValueMap         as ValueMapMsg
 from kineverse.model.paths                  import Path
 from kineverse.operations.urdf_operations   import load_urdf
 from kineverse.motion.min_qp_builder        import QPSolverException
-from kineverse.gradients.gradient_math      import Symbol, subs, cm
+from kineverse.gradients.gradient_math      import Symbol, subs, cm, dot
 from kineverse.visualization.plotting       import convert_qp_builder_log, draw_recorders
 from kineverse.time_wrapper                 import Time
 from kineverse.type_sets                    import is_symbolic
@@ -166,7 +166,7 @@ if __name__ == '__main__':
                 joint_state = dict(zip(joint_array, np.random.rand(len(joint_array)) * scale + offset))
 
                 # Generate n noise transforms
-                noise = [cm.to_numpy(t * r) for t, r in zip(random_normal_translation(len(frames), 0, linear_std),
+                noise = [cm.to_numpy(dot(t, r)) for t, r in zip(random_normal_translation(len(frames), 0, linear_std),
                                                             random_rot_normal(len(frames), 0, angular_std))]
 
                 # Calculate forward kinematics of frames
