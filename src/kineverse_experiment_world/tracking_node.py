@@ -27,7 +27,7 @@ from kineverse.visualization.ros_visualizer import ROSVisualizer
 
 from geometry_msgs.msg              import Pose             as PoseMsg
 from kineverse_experiment_world.msg import PoseStampedArray as PSAMsg
-from kineverse.msg                  import ValueMap         as ValueMapMsg
+from kineverse_msgs.msg             import ValueMap         as ValueMapMsg
 
 
 TrackerEntry = namedtuple('TrackerEntry', ['pose', 'update_state', 'model_cb'])

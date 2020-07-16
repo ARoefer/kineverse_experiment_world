@@ -7,7 +7,7 @@ import argparse
 from kineverse_experiment_world.tracking_node import TrackerNode
 
 from kineverse_experiment_world.msg    import PoseStampedArray as PSAMsg
-from kineverse.msg                     import ValueMap         as ValueMapMsg
+from kineverse_msgs.msg                import ValueMap         as ValueMapMsg
 
 from kineverse.bpb_wrapper import pb, create_object, create_cube_shape, create_sphere_shape, create_cylinder_shape, create_compound_shape, load_convex_mesh_shape, matrix_to_transform
 from kineverse.motion.min_qp_builder   import QPSolverException

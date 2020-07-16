@@ -26,7 +26,8 @@ from kineverse.operations.special_kinematics       import create_diff_drive_join
                                                           create_omnibase_joint_with_symbols, \
                                                           DiffDriveJoint
 from kineverse.time_wrapper                        import Time
-from kineverse.urdf_fix                            import urdf_filler
+from kineverse.urdf_fix                            import urdf_filler, \
+                                                          hacky_urdf_parser_fix
 from kineverse.utils                               import res_pkg_path
 from kineverse.visualization.bpb_visualizer        import ROSBPBVisualizer
 from kineverse.visualization.plotting              import draw_recorders,  \
@@ -102,8 +103,8 @@ if __name__ == '__main__':
     with open(res_pkg_path('package://iai_kitchen/urdf_obj/IAI_kitchen.urdf'), 'r') as urdf_file:
         urdf_kitchen_str = urdf_file.read() 
 
-    urdf_model    = urdf_filler(URDF.from_xml_string(urdf_str))
-    kitchen_model = urdf_filler(URDF.from_xml_string(urdf_kitchen_str))
+    urdf_model    = urdf_filler(URDF.from_xml_string(hacky_urdf_parser_fix(urdf_str)))
+    kitchen_model = urdf_filler(URDF.from_xml_string(hacky_urdf_parser_fix(urdf_kitchen_str)))
     
     traj_pup   = rospy.Publisher('/{}/commands/joint_trajectory'.format(urdf_model.name), JointTrajectoryMsg, queue_size=1)
     kitchen_traj_pup = rospy.Publisher('/{}/commands/joint_trajectory'.format(kitchen_model.name), JointTrajectoryMsg, queue_size=1)
