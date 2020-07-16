@@ -7,7 +7,7 @@ import argparse
 from kineverse_experiment_world.tracking_node import TrackerNode
 
 from kineverse_experiment_world.msg    import PoseStampedArray as PSAMsg
-from kineverse.msg                     import ValueMap         as ValueMapMsg
+from kineverse_msgs.msg                import ValueMap         as ValueMapMsg
 
 from kineverse.model.paths                  import Path
 from kineverse.operations.urdf_operations   import load_urdf

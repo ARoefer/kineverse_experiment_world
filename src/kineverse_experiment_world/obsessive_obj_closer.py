@@ -25,9 +25,9 @@ from kineverse.visualization.bpb_visualizer  import ROSBPBVisualizer
 
 from kineverse_experiment_world.push_demo_base import generate_push_closing
 
-from nav_msgs.msg    import Odometry   as OdometryMsg
-from sensor_msgs.msg import JointState as JointStateMsg
-from kineverse.msg   import ValueMap   as ValueMapMsg
+from nav_msgs.msg       import Odometry   as OdometryMsg
+from sensor_msgs.msg    import JointState as JointStateMsg
+from kineverse_msgs.msg import ValueMap   as ValueMapMsg
 
 goal_joints = {'prismatic', 'revolute'}
 

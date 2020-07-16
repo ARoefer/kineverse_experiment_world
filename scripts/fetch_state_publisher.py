@@ -4,7 +4,7 @@ import rospy
 
 from kineverse.gradients.diff_logic import Position
 
-from kineverse.msg import ValueMap as ValueMapMsg
+from kineverse_msgs.msg import ValueMap as ValueMapMsg
 
 if __name__ == '__main__':
     rospy.init_node('fetch_pose_publisher')
