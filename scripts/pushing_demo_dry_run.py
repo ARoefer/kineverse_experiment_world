@@ -20,7 +20,7 @@ from kineverse.motion.min_qp_builder               import TypedQPBuilder as TQPB
                                                           PID_Constraint as PIDC, \
                                                           ControlledValue, \
                                                           PANDA_LOGGING
-from kineverse.operations.basic_operations         import CreateComplexObject
+from kineverse.operations.basic_operations         import CreateValue
 from kineverse.operations.urdf_operations          import load_urdf
 from kineverse.operations.special_kinematics       import create_diff_drive_joint_with_symbols, \
                                                           create_omnibase_joint_with_symbols, \
@@ -116,7 +116,7 @@ if __name__ == '__main__':
     load_urdf(km, Path('kitchen'), kitchen_model)
 
     km.clean_structure()
-    km.apply_operation_before('create world', 'create {}'.format(robot), CreateComplexObject(Path('world'), Frame('')))
+    km.apply_operation_before('create world', 'create {}'.format(robot), CreateValue(Path('world'), Frame('')))
 
     if robot == 'pr2' or use_omni:
         base_op = create_omnibase_joint_with_symbols(Path('world/pose'), 
