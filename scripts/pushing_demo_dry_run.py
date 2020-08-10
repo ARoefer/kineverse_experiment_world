@@ -4,7 +4,8 @@ import argparse
 import rospy
 import numpy as np
 
-from kineverse.gradients.gradient_math             import *
+import kineverse.gradients.gradient_math as gm
+
 from kineverse.model.paths                         import Path
 from kineverse.model.frames                        import Frame
 from kineverse.model.geometry_model                import GeometryModel, \
@@ -24,7 +25,8 @@ from kineverse.operations.basic_operations         import CreateValue
 from kineverse.operations.urdf_operations          import load_urdf
 from kineverse.operations.special_kinematics       import create_diff_drive_joint_with_symbols, \
                                                           create_omnibase_joint_with_symbols, \
-                                                          DiffDriveJoint
+                                                          DiffDriveJoint, \
+                                                          CreateAdvancedFrameConnection
 from kineverse.time_wrapper                        import Time
 from kineverse.urdf_fix                            import urdf_filler, \
                                                           hacky_urdf_parser_fix
@@ -118,20 +120,25 @@ if __name__ == '__main__':
     km.clean_structure()
     km.apply_operation_before('create world', 'create {}'.format(robot), CreateValue(Path('world'), Frame('')))
 
+    base_joint_path = Path('{}/joints/to_world'.format(robot))
     if robot == 'pr2' or use_omni:
-        base_op = create_omnibase_joint_with_symbols(Path('world/pose'), 
-                                                   Path('{}/links/{}/pose'.format(robot, urdf_model.get_root())),
-                                                   Path('{}/joints/to_world'.format(robot)),
-                                                   vector3(0,0,1),
+        base_joint = create_omnibase_joint_with_symbols('world', 
+                                                   '{}/links/{}'.format(robot, urdf_model.get_root()),
+                                                   gm.vector3(0, 0, 1),
                                                    1.0, 0.6, Path(robot))
     else:
-        base_op = create_diff_drive_joint_with_symbols(Path('world/pose'), 
-                                                   Path('{}/links/{}/pose'.format(robot, urdf_model.get_root())),
-                                                   Path('{}/joints/to_world'.format(robot)),
+        base_joint = create_diff_drive_joint_with_symbols('world', 
+                                                   '{}/links/{}'.format(robot, urdf_model.get_root()),
                                                    0.12 * 0.5,
                                                    0.3748,
                                                    17.4, Path(robot))
-    km.apply_operation_after('connect world {}'.format(urdf_model.get_root()), 'create {}/{}'.format(robot, urdf_model.get_root()), base_op)
+    km.apply_operation_after('create {}'.format(base_joint_path),
+                             'create {}/{}'.format(robot, urdf_model.get_root()), CreateValue(base_joint_path, base_joint))
+    km.apply_operation_after('connect world {}'.format(urdf_model.get_root()), 
+                             'create {}'.format(base_joint_path),
+      CreateAdvancedFrameConnection(base_joint_path, 
+                                    Path('world'), 
+                                    Path('{}/links/{}'.format(robot, urdf_model.get_root()))))
     km.clean_structure()
     km.dispatch_events()
 
@@ -145,11 +152,11 @@ if __name__ == '__main__':
     # GOAL DEFINITION
     eef_path = Path('{}/links/gripper_link/pose'.format(robot)) if robot != 'pr2' else Path('pr2/links/r_gripper_r_finger_tip_link/pose')
     eef_pose = km.get_data(eef_path)
-    eef_pos  = pos_of(eef_pose)
+    eef_pos  = gm.pos_of(eef_pose)
 
     cam_pose    = km.get_data('{}/links/head_camera_link/pose'.format(robot)) if robot != 'pr2' else km.get_data('pr2/links/head_mount_link/pose')
-    cam_pos     = pos_of(cam_pose)
-    cam_forward = x_of(cam_pose)
+    cam_pos     = gm.pos_of(cam_pose)
+    cam_forward = gm.x_of(cam_pose)
     cam_to_eef  = eef_pos - cam_pos
 
     parts = ['iai_fridge_door_handle', #]
@@ -169,9 +176,9 @@ if __name__ == '__main__':
     # QP CONFIGURTION
     base_joint    = km.get_data('{}/joints/to_world'.format(robot))
     base_link     = km.get_data('{}/links/{}'.format(robot, urdf_model.get_root())) 
-    joint_symbols = [j.position for j in km.get_data('{}/joints'.format(robot)).values() if hasattr(j, 'position') and type(j.position) is Symbol]
+    joint_symbols = [j.position for j in km.get_data('{}/joints'.format(robot)).values() if hasattr(j, 'position') and gm.is_symbol(j.position)]
     
-    robot_controlled_symbols = {DiffSymbol(j) for j in joint_symbols}
+    robot_controlled_symbols = {gm.DiffSymbol(j) for j in joint_symbols}
     integration_rules        = None
     if isinstance(base_joint, DiffDriveJoint):
         robot_controlled_symbols |= {base_joint.l_wheel_vel, base_joint.r_wheel_vel}
@@ -184,7 +191,7 @@ if __name__ == '__main__':
                       base_joint.y_pos: base_joint.y_pos + DT_SYM * (base_joint.r_wheel_vel * sin(base_joint.a_pos) * base_joint.wheel_radius * 0.5 + base_joint.l_wheel_vel * sin(base_joint.a_pos) * base_joint.wheel_radius * 0.5),
                       base_joint.a_pos: base_joint.a_pos + DT_SYM * (base_joint.r_wheel_vel * (base_joint.wheel_radius / base_joint.wheel_distance) + base_joint.l_wheel_vel * (- base_joint.wheel_radius / base_joint.wheel_distance))}
     else:
-        robot_controlled_symbols |= {get_diff(x) for x in [base_joint.x_pos, base_joint.y_pos, base_joint.a_pos]}
+        robot_controlled_symbols |= {gm.get_diff(x) for x in [base_joint.x_pos, base_joint.y_pos, base_joint.a_pos]}
     
     n_iter    = []
     total_dur = []
@@ -194,9 +201,9 @@ if __name__ == '__main__':
         kitchen_path = Path('kitchen/links/{}/pose'.format(part))
         obj_pose = km.get_data(kitchen_path)
 
-        controlled_symbols = robot_controlled_symbols.union({DiffSymbol(j) for j in obj_pose.free_symbols})
+        controlled_symbols = robot_controlled_symbols.union({gm.DiffSymbol(j) for j in gm.free_symbols(obj_pose)})
         
-        start_state = {s: 0.4 for s in obj_pose.free_symbols}
+        start_state = {s: 0.4 for s in gm.free_symbols(obj_pose)}
 
         constraints, geom_distance, coll_world, debug_draw = generate_push_closing(km, 
                                                                                    start_state, 
@@ -207,35 +214,38 @@ if __name__ == '__main__':
                                                                                    kitchen_path[:-1],
                                                                                    use_geom_circulation)
 
-        start_state.update({s: 0.0 for s in coll_world.free_symbols})
-        start_state.update({s: 0.4 for s in obj_pose.free_symbols})
+        start_state.update({s: 0.0 for s in gm.free_symbols(coll_world)})
+        start_state.update({s: 0.4 for s in gm.free_symbols(obj_pose)})
         controlled_values, constraints = generate_controlled_values(constraints, controlled_symbols)
-        controlled_values = depth_weight_controlled_values(km, controlled_values, exp_factor=1.1)
+        controlled_values = depth_weight_controlled_values(km, controlled_values, exp_factor=1.02)
         
         if isinstance(base_joint, DiffDriveJoint):
           controlled_values[str(base_joint.l_wheel_vel)].weight = 0.001 
           controlled_values[str(base_joint.r_wheel_vel)].weight = 0.001 
 
+        # print('\n'.join('{}:{}'.format(n, cv) for n, cv in sorted(controlled_values.items())))
+
         # CAMERA STUFF
-        cam_to_obj = pos_of(obj_pose) - cam_pos
-        look_goal  = 1 - (dot(cam_to_obj, cam_forward) / norm(cam_to_obj))
+        cam_to_obj = gm.pos_of(obj_pose) - cam_pos
+        look_goal  = 1 - (gm.dot_product(cam_to_obj, cam_forward) / gm.norm(cam_to_obj))
 
         # GOAL CONSTAINT GENERATION
         goal_constraints = {'reach_point': PIDC(geom_distance, geom_distance, 1, k_i=0.01),
                             'look_at_obj':   SC(   -look_goal,    -look_goal, 1, look_goal)}
-        goal_constraints.update({'open_object_{}'.format(x): PIDC(s, s, 1) for x, s in enumerate(obj_pose.free_symbols)})
+        goal_constraints.update({'open_object_{}'.format(x): PIDC(s, s, 1) for x, s in enumerate(gm.free_symbols(obj_pose))})
 
-        in_contact = less_than(geom_distance, 0.01)
+        in_contact = gm.less_than(geom_distance, 0.01)
         
         if robot == 'pr2':
-          start_state.update({Position(Path(robot) + (k,)): v  for k, v in arm_poses.items()})
+          start_state.update({gm.Position(Path(robot) + (k,)): v  for k, v in arm_poses.items()})
         else:
-          start_state.update({Position(Path(robot) + (k,)): v  for k, v in tucked_arm.items()})
+          start_state.update({gm.Position(Path(robot) + (k,)): v  for k, v in tucked_arm.items()})
 
         if args.vis_plan:
             qpb = GQPB(coll_world, constraints, goal_constraints, controlled_values, visualizer=visualizer)
         else:
             qpb = GQPB(coll_world, constraints, goal_constraints, controlled_values) #, visualizer=visualizer)
+
         qpb._cb_draw = debug_draw
         integrator = CommandIntegrator(qpb,
         #integrator = CommandIntegrator(TQPB(constraints, goal_constraints, controlled_values),
