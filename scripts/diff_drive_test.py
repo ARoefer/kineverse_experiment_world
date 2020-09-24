@@ -22,7 +22,7 @@ if __name__ == '__main__':
     print(a_limit)
 
     rw_v, lw_v = [Velocity(x + 'w') for x in 'rl']
-    l_v,   a_v = [Velocity(x) for x in 'ra']
+    l_v,   a_v = [Velocity(x) for x in 'la']
 
     x1, y1, a1 = [Position(x + '1') for x in 'xya']
     x2, y2, a2 = [Position(x + '2') for x in 'xya']
@@ -46,23 +46,24 @@ if __name__ == '__main__':
         x1: x1 + DT_SYM * (rw_v * cos(a1) * r * 0.5 + lw_v * cos(a1) * r * 0.5),
         y1: y1 + DT_SYM * (rw_v * sin(a1) * r * 0.5 + lw_v * sin(a1) * r * 0.5),
         a1: a1 + DT_SYM * (rw_v * (r / L) + lw_v * (- r / L)),
-        x2: x2 + DT_SYM * l_v * cos(a2),
-        y2: y2 + DT_SYM * l_v * sin(a2),
-        a2: a2 + DT_SYM * a_v
+        # x2: x2 + DT_SYM * l_v * cos(a2),
+        # y2: y2 + DT_SYM * l_v * sin(a2),
+        # a2: a2 + DT_SYM * a_v
     }
 
     goal = point3(1, 1, 0)
 
-    diff_dist = norm(diff_drive * point3(0.1, 0, 0) - goal) # 
-    md_dist   = norm(my_drive * point3(0.1, 0, 0) - goal)   # 
+    diff_dist = norm(dot(diff_drive, point3(0.1, 0, 0)) - goal) # 
+    # md_dist   = norm(dot(my_drive, point3(0.1, 0, 0)) - goal)   # 
 
     qpb = TQPB({},
-               {'goal diff_drive': SC(-diff_dist, -diff_dist, 1, diff_dist),
-                'goal my_drive':   SC(-md_dist,     -md_dist, 1,   md_dist)},
-               {'rw_v': CV(-r_limit, r_limit, rw_v, 0.001),
-                'lw_v': CV(-r_limit, r_limit, lw_v, 0.001),
-                'l_v':  CV(-1,             1,  l_v, 0.001),
-                'a_v':  CV(-a_limit, a_limit,  a_v, 0.001)})
+               {'goal diff_drive': SC(-diff_dist, -diff_dist, 1, diff_dist)},
+                # 'goal my_drive':   SC(-md_dist,     -md_dist, 1,   md_dist)},
+               {str(rw_v): CV(-r_limit, r_limit, rw_v, 0.001),
+                str(lw_v): CV(-r_limit, r_limit, lw_v, 0.001),
+                # str(l_v):  CV(-1,             1,  l_v, 0.001),
+                # str(a_v):  CV(-a_limit, a_limit,  a_v, 0.001)
+                })
 
 
 
@@ -84,11 +85,12 @@ if __name__ == '__main__':
         state[DT_SYM] = 0.1
 
         for x in range(100):
-
-            state.update({s: e.subs(cmd).subs(state) for s, e in int_rules.items()})
+            temp = state.copy()
+            temp.update(cmd)
+            state.update({s: subs(e, temp) for s, e in int_rules.items()})
 
             diff_points.append((state[x1], state[y1], state[a1]))
-            md_points.append((state[x2], state[y2], state[a2]))
+            # md_points.append((state[x2], state[y2], state[a2]))
 
             # if qpb.equilibrium_reached():
             #     print('optimization ende early')
@@ -108,7 +110,7 @@ if __name__ == '__main__':
     for n, diff_points in enumerate(full_diff_points):
         diff_p = [point3(x, y, 0) + vector3((n / 3) * 0.5, (n % 3)* -0.5, 0) for x, y, _ in diff_points]
         diff_d = [vector3(cos(a), sin(a), 0) for _, _, a in diff_points]
-        vis.draw_strip('paths', se.eye(4), 0.02, diff_p)
+        vis.draw_strip('paths', eye(4), 0.02, diff_p)
     #vis.draw_strip('paths', spw.eye(4), 0.02, md_p, r=0, g=1)
     vis.render('paths')
 

@@ -44,30 +44,51 @@ from trajectory_msgs.msg import JointTrajectory as JointTrajectoryMsg
 
 from urdf_parser_py.urdf import URDF
 
-tucked_arm = {'wrist_roll_joint'   : 0.0,
-              'shoulder_pan_joint' : 1.32,
+# TERMINAL COMMANDS TO RUN WITH DIFFERENT ROBOTS:
+# HSR: ../scripts/pushing_demo_dry_run.py --vis-plan=during --robot=hsr --link=hand_l_distal_link --camera=head_l_stereo_camera_link
+# DONBOT: ./scripts/pushing_demo_dry_run.py --vis-plan=during --robot=iai_donbot --link=gripper_finger_right_link
+# BOXY: ./scripts/pushing_demo_dry_run.py --vis-plan=during --robot=iai_boxy --link=right_gripper_finger_right_link  --camera=head_mount_kinect2_rgb_optical_frame
+# FETCH: ./scripts/pushing_demo_dry_run.py --nav=linear --robot=fetch --vis-plan=during --omni=False
+# PR2: 
+
+start_poses = {
+  'fetch' : {'wrist_roll_joint'   : 0.0,
+              'shoulder_pan_joint' : 1.0,
               'elbow_flex_joint'   : 1.72,
               'forearm_roll_joint' : 0.0,
               'upperarm_roll_joint': -0.2,
               'wrist_flex_joint'   : 1.66,
               'shoulder_lift_joint': 1.4,
-              'torso_lift_joint'   : 0.2}
-arm_poses  = {'l_elbow_flex_joint' : -2.1213,
+              'torso_lift_joint'   : 0.2},
+  'pr2' : {'l_elbow_flex_joint' : -2.1213,
               'l_shoulder_lift_joint': 1.2963,
               'l_wrist_flex_joint' : -1.05,
               'r_elbow_flex_joint' : -2.1213,
               'r_shoulder_lift_joint': 1.2963,
               'r_wrist_flex_joint' : -1.05,
-              'torso_lift_joint'   : 0.16825}
-
-# robot = 'pr2'
-robot = 'fetch'
-
-use_omni =  False
-# use_geom_circulation = None
-# use_geom_circulation = 'linear'
-# use_geom_circulation = 'cubic'
-use_geom_circulation = 'cross'
+              'torso_lift_joint'   : 0.16825},
+  'iai_boxy': {'neck_shoulder_pan_joint': -1.57,
+               'neck_shoulder_lift_joint': -1.88,
+               'neck_elbow_joint': -2.0,
+               'neck_wrist_1_joint': 0.139999387693,
+               'neck_wrist_2_joint': 1.56999999998,
+               'neck_wrist_3_joint': 0,
+               'triangle_base_joint': -0.24,
+               'left_arm_0_joint': 0.68,
+               'left_arm_1_joint': 1.08,
+               'left_arm_2_joint': -0.13,
+               'left_arm_3_joint': -1.35,
+               'left_arm_4_joint': 0.3,
+               'left_arm_5_joint': 0.7,
+               'left_arm_6_joint': -0.01,
+               'right_arm_0_joint': 0.68,
+               'right_arm_1_joint': -1.08,
+               'right_arm_2_joint': 0.13,
+               'right_arm_3_joint': 1.35,
+               'right_arm_4_joint': -0.3,
+               'right_arm_5_joint': -0.7,
+               'right_arm_6_joint': 0.01},
+              }
 
 def str2bool(v):
     if isinstance(v, bool):
@@ -83,15 +104,31 @@ if __name__ == '__main__':
     rospy.init_node('kineverse_sandbox')
 
     parser = argparse.ArgumentParser(description='Plans motions for closing doors and drawers in the IAI kitchen environment using various robots.')
-    parser.add_argument('--robot', '-r', default='pr2', help='Name of the robot to use. [ pr2 | fetch ]')
+    parser.add_argument('--robot', '-r', default='pr2', help='Name of the robot to use. Will look for package://ROBOT_description/robot/ROBOT.urdf')
     parser.add_argument('--omni', type=str2bool, default=True, help='To use an omnidirectional base or not.')
-    parser.add_argument('--nav', type=str, default='cross', help='Heuristic for navigating object geometry. [ cross |  linear | cubic ]')
-    parser.add_argument('--vis-plan', type=str2bool, default=False, help='Visualize trajector while planning.')
-    
+    parser.add_argument('--nav', type=str, default='linear', help='Heuristic for navigating object geometry. [ cross |  linear | cubic ]')
+    parser.add_argument('--vis-plan', type=str, default='after', help='Visualize trajector while planning. [ during | after | none ]')
+    parser.add_argument('--link', type=str, default=None, help='Link of the robot to use for actuation.')
+    parser.add_argument('--camera', type=str, default=None, help='Camera link of the robot.')
+
     args = parser.parse_args()
     robot    = args.robot
     use_omni = args.omni
     use_geom_circulation = args.nav
+    
+    if args.link is not None:
+      robot_link = args.link
+    elif robot == 'pr2':
+      robot_link = 'r_gripper_r_finger_tip_link'
+    else:
+      robot_link = 'gripper_link' # 'r_gripper_finger_link'
+
+    camera_link = args.camera
+    if camera_link is None:
+      if args.robot == 'fetch':
+        camera_link = 'head_camera_rgb_optical_frame'
+      elif args.robot == 'pr2':
+        camera_link = 'head_mount_kinect_rgb_optical_frame'
 
     plot_dir = res_pkg_path('package://kineverse/test/plots')
 
@@ -150,14 +187,15 @@ if __name__ == '__main__':
 
 
     # GOAL DEFINITION
-    eef_path = Path('{}/links/gripper_link/pose'.format(robot)) if robot != 'pr2' else Path('pr2/links/r_gripper_r_finger_tip_link/pose')
+    eef_path = Path('{}/links/{}/pose'.format(robot, robot_link))
     eef_pose = km.get_data(eef_path)
     eef_pos  = gm.pos_of(eef_pose)
 
-    cam_pose    = km.get_data('{}/links/head_camera_link/pose'.format(robot)) if robot != 'pr2' else km.get_data('pr2/links/head_mount_link/pose')
-    cam_pos     = gm.pos_of(cam_pose)
-    cam_forward = gm.x_of(cam_pose)
-    cam_to_eef  = eef_pos - cam_pos
+    if camera_link is not None:
+      cam_pose    = km.get_data('{}/links/{}/pose'.format(robot, camera_link))
+      cam_pos     = gm.pos_of(cam_pose)
+      cam_forward = gm.z_of(cam_pose)
+      cam_to_eef  = eef_pos - cam_pos
 
     parts = ['iai_fridge_door_handle', #]
              'fridge_area_lower_drawer_handle',#]
@@ -171,7 +209,7 @@ if __name__ == '__main__':
              'sink_area_left_middle_drawer_handle',
              'sink_area_left_upper_drawer_handle',
              'sink_area_trash_drawer_handle'
-             ]
+             ] # oven_area_area_left_drawer_handle
     
     # QP CONFIGURTION
     base_joint    = km.get_data('{}/joints/to_world'.format(robot))
@@ -187,8 +225,8 @@ if __name__ == '__main__':
         # exit()
 
         integration_rules = {
-                      base_joint.x_pos: base_joint.x_pos + DT_SYM * (base_joint.r_wheel_vel * cos(base_joint.a_pos) * base_joint.wheel_radius * 0.5 + base_joint.l_wheel_vel * cos(base_joint.a_pos) * base_joint.wheel_radius * 0.5),
-                      base_joint.y_pos: base_joint.y_pos + DT_SYM * (base_joint.r_wheel_vel * sin(base_joint.a_pos) * base_joint.wheel_radius * 0.5 + base_joint.l_wheel_vel * sin(base_joint.a_pos) * base_joint.wheel_radius * 0.5),
+                      base_joint.x_pos: base_joint.x_pos + DT_SYM * (base_joint.r_wheel_vel * gm.cos(base_joint.a_pos) * base_joint.wheel_radius * 0.5 + base_joint.l_wheel_vel * gm.cos(base_joint.a_pos) * base_joint.wheel_radius * 0.5),
+                      base_joint.y_pos: base_joint.y_pos + DT_SYM * (base_joint.r_wheel_vel * gm.sin(base_joint.a_pos) * base_joint.wheel_radius * 0.5 + base_joint.l_wheel_vel * gm.sin(base_joint.a_pos) * base_joint.wheel_radius * 0.5),
                       base_joint.a_pos: base_joint.a_pos + DT_SYM * (base_joint.r_wheel_vel * (base_joint.wheel_radius / base_joint.wheel_distance) + base_joint.l_wheel_vel * (- base_joint.wheel_radius / base_joint.wheel_distance))}
     else:
         robot_controlled_symbols |= {gm.get_diff(x) for x in [base_joint.x_pos, base_joint.y_pos, base_joint.a_pos]}
@@ -217,42 +255,42 @@ if __name__ == '__main__':
         start_state.update({s: 0.0 for s in gm.free_symbols(coll_world)})
         start_state.update({s: 0.4 for s in gm.free_symbols(obj_pose)})
         controlled_values, constraints = generate_controlled_values(constraints, controlled_symbols)
-        controlled_values = depth_weight_controlled_values(km, controlled_values, exp_factor=1.02)
+        controlled_values = depth_weight_controlled_values(km, controlled_values, exp_factor=1.0)
         
+        print(len(controlled_symbols))
+
         if isinstance(base_joint, DiffDriveJoint):
-          controlled_values[str(base_joint.l_wheel_vel)].weight = 0.001 
-          controlled_values[str(base_joint.r_wheel_vel)].weight = 0.001 
+          controlled_values[str(base_joint.l_wheel_vel)].weight_id = 0.002
+          controlled_values[str(base_joint.r_wheel_vel)].weight_id = 0.002
 
         # print('\n'.join('{}:{}'.format(n, cv) for n, cv in sorted(controlled_values.items())))
 
-        # CAMERA STUFF
-        cam_to_obj = gm.pos_of(obj_pose) - cam_pos
-        look_goal  = 1 - (gm.dot_product(cam_to_obj, cam_forward) / gm.norm(cam_to_obj))
-
         # GOAL CONSTAINT GENERATION
-        goal_constraints = {'reach_point': PIDC(geom_distance, geom_distance, 1, k_i=0.01),
-                            'look_at_obj':   SC(   -look_goal,    -look_goal, 1, look_goal)}
+        goal_constraints = {'reach_point': PIDC(geom_distance, geom_distance, 1, k_i=0.001)}
+        
+        # CAMERA STUFF
+        if camera_link:
+          cam_to_obj = gm.pos_of(obj_pose) - cam_pos
+          look_goal  = 1 - (gm.dot_product(cam_to_obj, cam_forward) / gm.norm(cam_to_obj))
+          goal_constraints['look_at_obj'] = SC(   -look_goal,    -look_goal, 1, look_goal)
+        
         goal_constraints.update({'open_object_{}'.format(x): PIDC(s, s, 1) for x, s in enumerate(gm.free_symbols(obj_pose))})
 
         in_contact = gm.less_than(geom_distance, 0.01)
         
-        if robot == 'pr2':
-          start_state.update({gm.Position(Path(robot) + (k,)): v  for k, v in arm_poses.items()})
-        else:
-          start_state.update({gm.Position(Path(robot) + (k,)): v  for k, v in tucked_arm.items()})
+        if robot in start_poses:
+          start_state.update({gm.Position(Path(robot) + (k,)): v  for k, v in start_poses[robot].items()})
 
-        if args.vis_plan:
+        if args.vis_plan == 'during':
             qpb = GQPB(coll_world, constraints, goal_constraints, controlled_values, visualizer=visualizer)
         else:
-            qpb = GQPB(coll_world, constraints, goal_constraints, controlled_values) #, visualizer=visualizer)
+            qpb = GQPB(coll_world, constraints, goal_constraints, controlled_values)
 
         qpb._cb_draw = debug_draw
         integrator = CommandIntegrator(qpb,
-        #integrator = CommandIntegrator(TQPB(constraints, goal_constraints, controlled_values),
                                        integration_rules,
                                        start_state=start_state,
                                        recorded_terms={'distance': geom_distance,
-                                                       'gaze_align': look_goal,
                                                        'in contact': in_contact,
                                                        'goal': goal_constraints.values()[0].expr,
                                                        'location_x': base_joint.x_pos,
@@ -264,10 +302,10 @@ if __name__ == '__main__':
         int_factor = 0.1
         integrator.restart('{} Cartesian Goal Example'.format(robot))
         try:
-            start = Time.now()
-            integrator.run(int_factor, 500)
-            total_dur.append((Time.now() - start).to_sec())
-            n_iter.append(integrator.current_iteration + 1)
+          start = Time.now()
+          integrator.run(int_factor, 500)
+          total_dur.append((Time.now() - start).to_sec())
+          n_iter.append(integrator.current_iteration + 1)
         except Exception as e:
             print(e)
 
@@ -278,7 +316,7 @@ if __name__ == '__main__':
             rec_w, rec_b, rec_c, recs = convert_qp_builder_log(integrator.qp_builder)
             draw_recorders([rec_b, rec_c] + [r for _, r in sorted(recs.items())], 1, 8, 4).savefig('{}/{}_sandbox_{}_constraints.png'.format(plot_dir, robot, part))
 
-        if not args.vis_plan:
+        if args.vis_plan == 'after':
             traj_vis.visualize(integrator.recorder.data, hz=50)
             pass
 
@@ -287,6 +325,7 @@ if __name__ == '__main__':
 
     traj_vis.shutdown()
 
-    print('Mean Iter: {}\nMean Iter D: {}\nIter D SD: {}'.format(np.mean(n_iter), 
+    print('Mean Iter: {}\nMean Iter D: {:>2.6f}\nIter D SD: {:>2.6f}\nMean planning duration: {:>2.6f}s'.format(np.mean(n_iter), 
                                                                  np.mean([d / float(i) for d, i in zip(total_dur, n_iter)]),
-                                                                 np.std([d / float(i) for d, i in zip(total_dur, n_iter)])))
+                                                                 np.std([d / float(i) for d, i in zip(total_dur, n_iter)]),
+                                                                 np.mean(total_dur)))
