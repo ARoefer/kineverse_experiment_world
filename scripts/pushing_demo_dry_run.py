@@ -5,7 +5,7 @@ import rospy
 import numpy as np
 
 from kineverse.gradients.gradient_math             import *
-from kineverse.model.paths                         import Path
+from kineverse.model.paths                         import Path, CPath
 from kineverse.model.frames                        import Frame
 from kineverse.model.geometry_model                import GeometryModel, \
                                                           contact_geometry, \
@@ -20,11 +20,12 @@ from kineverse.motion.min_qp_builder               import TypedQPBuilder as TQPB
                                                           PID_Constraint as PIDC, \
                                                           ControlledValue, \
                                                           PANDA_LOGGING
-from kineverse.operations.basic_operations         import CreateComplexObject
+from kineverse.operations.basic_operations         import ExecFunction
 from kineverse.operations.urdf_operations          import load_urdf
 from kineverse.operations.special_kinematics       import create_diff_drive_joint_with_symbols, \
                                                           create_omnibase_joint_with_symbols, \
-                                                          DiffDriveJoint
+                                                          DiffDriveJoint, \
+                                                          CreateAdvancedFrameConnection
 from kineverse.time_wrapper                        import Time
 
 from kineverse.urdf_fix                            import urdf_filler, \
@@ -120,23 +121,33 @@ if __name__ == '__main__':
     load_urdf(km, Path('kitchen'), kitchen_model)
 
     km.clean_structure()
-    km.apply_operation_before('create world', 'create {}'.format(robot), CreateComplexObject(Path('world'), Frame('')))
+    km.apply_operation_before('create world', 'create {}'.format(robot), ExecFunction(Path('world'), Frame, ''))
+
+    base_joint_path = Path(f'{robot}/joints/to_world')
 
     # Insert base to world kinematic
     if robot == 'pr2' or use_omni:
-        base_op = create_omnibase_joint_with_symbols(Path('world/pose'), 
-                                                   Path('{}/links/{}/pose'.format(robot, urdf_model.get_root())),
-                                                   Path('{}/joints/to_world'.format(robot)),
-                                                   vector3(0,0,1),
-                                                   1.0, 0.6, Path(robot))
+        base_op = ExecFunction(base_joint_path,
+                               create_omnibase_joint_with_symbols,
+                                    CPath('world/pose'), 
+                                    CPath('{}/links/{}/pose'.format(robot, urdf_model.get_root())),
+                                    vector3(0,0,1),
+                                    1.0, 0.6, CPath(robot))
     else:
-        base_op = create_diff_drive_joint_with_symbols(Path('world/pose'), 
-                                                   Path('{}/links/{}/pose'.format(robot, urdf_model.get_root())),
-                                                   Path('{}/joints/to_world'.format(robot)),
-                                                   0.12 * 0.5,
-                                                   0.3748,
-                                                   17.4, Path(robot))
-    km.apply_operation_after('connect world {}'.format(urdf_model.get_root()), 'create {}/{}'.format(robot, urdf_model.get_root()), base_op)
+        base_op = ExecFunction(base_joint_path,
+                               create_diff_drive_joint_with_symbols,
+                                    CPath('world/pose'), 
+                                    CPath('{}/links/{}/pose'.format(robot, urdf_model.get_root())),
+                                    0.12 * 0.5,
+                                    0.3748,
+                                    17.4, CPath(robot))
+    km.apply_operation_after(f'create {base_joint_path}',
+                             f'create {robot}/{urdf_model.get_root()}', base_op)
+    km.apply_operation_after(f'connect world {urdf_model.get_root()}',
+                             f'create {base_joint_path}',
+                             CreateAdvancedFrameConnection(base_joint_path,
+                                                           Path('world'),
+                                                           Path('{}/links/{}'.format(robot, urdf_model.get_root()))))
     km.clean_structure()
     km.dispatch_events()
 
@@ -152,6 +163,8 @@ if __name__ == '__main__':
     eef_path = Path('{}/links/gripper_link/pose'.format(robot)) if robot != 'pr2' else Path('pr2/links/r_gripper_r_finger_tip_link/pose')
     eef_pose = km.get_data(eef_path)
     eef_pos  = cm.pos_of(eef_pose)
+
+    print('EEF free symbols:\n  {}'.format('\n  '.join(sorted([str(s) for s in free_symbols(eef_pose)]))))
 
     cam_pose    = km.get_data('{}/links/head_camera_link/pose'.format(robot)) if robot != 'pr2' else km.get_data('pr2/links/head_mount_link/pose')
     cam_pos     = cm.pos_of(cam_pose)
@@ -253,7 +266,7 @@ if __name__ == '__main__':
                                        recorded_terms={'distance': geom_distance,
                                                        'gaze_align': look_goal,
                                                        'in contact': in_contact,
-                                                       'goal': goal_constraints.values()[0].expr,
+                                                       'goal': next(iter(goal_constraints.values())).expr,
                                                        'location_x': base_joint.x_pos,
                                                        'location_y': base_joint.y_pos,
                                                        'rotation_a': base_joint.a_pos})
@@ -264,7 +277,7 @@ if __name__ == '__main__':
         integrator.restart('{} Cartesian Goal Example'.format(robot))
         try:
             start = Time.now()
-            integrator.run(int_factor, 500)
+            integrator.run(int_factor, 500, logging=False)
             total_dur.append((Time.now() - start).to_sec())
             n_iter.append(integrator.current_iteration + 1)
         except Exception as e:
