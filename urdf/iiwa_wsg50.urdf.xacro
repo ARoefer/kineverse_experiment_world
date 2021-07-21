@@ -1,0 +1,12 @@
+<?xml version="1.0" ?>
+<robot name="kuka_lbr_iiwa_14_r820" xmlns:xacro="http://wiki.ros.org/xacro">
+  <xacro:include filename="$(find kuka_lbr_iiwa_support)/urdf/lbr_iiwa_14_r820_macro.xacro"/>
+  <xacro:kuka_lbr_iiwa_14_r820 prefix=""/>
+
+  <xacro:include filename="$(find iai_wsg_50_description)/urdf/wsg_50.urdf.xacro"/>
+
+  <xacro:wsg_50_xacro name="wsg_50" parent="tool0">
+    <pose xyz="0 0 0" rpy="0 0 0" />
+  </xacro:wsg_50_xacro>
+
+</robot>
