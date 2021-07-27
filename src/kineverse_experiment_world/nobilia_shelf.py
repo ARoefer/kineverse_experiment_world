@@ -60,11 +60,50 @@ def create_nobilia_shelf(km, prefix, origin_pose=gm.eye(4), parent_path=Path('wo
                                                                      shelf_width - 0.005,
                                                                      shelf_height * 0.5 - 0.005))
     
+    # Sketch of mechanism
+    #                 
+    #           T ---- a
+    #         ----      \  Z
+    #       b ..... V    \
+    #       |      ...... d
+    #    B  |       ------
+    #       c ------
+    #                L
+    #
+    # Diagonal V is virtual  
+    #
+    #
+    # Angles:
+    #   a -> alpha (given)
+    #   b -> gamma_1 + gamma_2 = gamma
+    #   c -> don't care
+    #   d -> delta_1 + delta_2 = delta
+    #
 
     opening_position = gm.Position(prefix + ('door',))
-    tf_top_panel = gm.dot(gm.translation3(-shelf_body_depth * 0.5 - 0.5 * wall_width, 0, 0.5 * shelf_height - wall_width),
+
+    # Top hinge
+    point_a  = gm.point3(-shelf_body_depth * 0.5 - 0.5 * wall_width, 0, 0.5 * shelf_height - wall_width)
+    # Hinge lift arm
+    point_d  = point_a + gm.vector3(-0.09, 0, -0.16)
+    length_z = gm.norm(point_a - point_d)
+    
+    # Zero alpha along the vertical axis
+    alpha    = gm.acos(gm.dot_product(point_d - point_a, gm.vector3(0, 0, -1)) / gm.norm(point_d - point_a)) + opening_position
+
+    length_t = 0.37
+    length_b = 0.16
+    length_l = 0.38
+
+    gamma_1  = gm.atan((length_t - length_z) / (length_t - length_z) * gm.tan(0.5 * math.pi * alpha)) - 0.5 * (math.pi - alpha)
+    length_v = (length_t * gm.sin(alpha) / gm.sin(gamma_1))
+    gamma_2  = gm.acos((length_b**2 + length_v**2 - length_l**2) / (2 * length_b * length_v))
+
+    gamma = gamma_1 + gamma_2
+
+    tf_top_panel = gm.dot(gm.translation3(point_a[0], point_a[1], point_a[2]),
                           gm.rotation3_axis_angle(gm.vector3(0, 1, 0), opening_position + math.pi * 0.5),
-                          gm.translation3(geom_panel_top.scale[2] * 0.5, 0, 0),
+                          gm.translation3(geom_panel_top.scale[2] * 0.5 - 0.5 * wall_width, 0, 0),
                           gm.rotation3_axis_angle(gm.vector3(0, 1, 0), math.pi * 0.5))
 
     rb_panel_top = RigidBody(l_prefix + ('body',), gm.dot(rb_body.pose, tf_top_panel),
@@ -72,9 +111,10 @@ def create_nobilia_shelf(km, prefix, origin_pose=gm.eye(4), parent_path=Path('wo
                                                    geometry={0: geom_panel_top},
                                                    collision={0: geom_panel_top})
 
-    tf_bottom_panel = gm.dot(gm.translation3(0, 0, 0.5 * shelf_height + 0.03),
-                             gm.rotation3_axis_angle(gm.vector3(0, 1, 0), -opening_position),
-                             gm.translation3(0, 0, 0.5 * shelf_height - 0.03))
+    # old offset: 0.5 * geom_panel_top.scale[2] + 0.03
+    tf_bottom_panel = gm.dot(gm.translation3(0, 0, length_t),
+                             gm.rotation3_axis_angle(gm.vector3(0, 1, 0), gamma),
+                             gm.translation3(0, 0, 0.5 * geom_panel_bottom.scale[2] - 0.03))
 
     rb_panel_bottom = RigidBody(l_prefix + ('panel_top',), gm.dot(rb_panel_top.pose, tf_bottom_panel),
                                                            tf_bottom_panel,
@@ -83,7 +123,7 @@ def create_nobilia_shelf(km, prefix, origin_pose=gm.eye(4), parent_path=Path('wo
 
     km.apply_operation(f'create {prefix}/links/body', CreateValue(rb_panel_top.parent, rb_body))
     km.apply_operation(f'create {prefix}/links/panel_top', CreateValue(rb_panel_bottom.parent, rb_panel_top))
-    km.apply_operation(f'create {prefix}/links/panel_bottom', CreateValue(l_prefix + ('panel_top',) , rb_panel_top))
+    km.apply_operation(f'create {prefix}/links/panel_bottom', CreateValue(l_prefix + ('panel_bottom',) , rb_panel_bottom))
     km.apply_operation(f'create {prefix}/joints/hinge', ExecFunction(prefix + Path('joints/hinge'), 
                                                                      RevoluteJoint,
                                                                      CPath(rb_panel_top.parent),
