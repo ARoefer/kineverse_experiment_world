@@ -49,7 +49,7 @@ if __name__ == '__main__':
                 rotation    = trans.transform.rotation
                 out_file.write(f'{stamp.secs}, {stamp.nsecs}, '
                                f'{target}, {source}, '
-                               f'{translation.x}, {translation.y}, {translation.z}'
+                               f'{translation.x}, {translation.y}, {translation.z},'
                                f'{rotation.x}, {rotation.y}, {rotation.z}, {rotation.w}\n')
             except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
                 print(f'Exception raised while looking up {source} -> {target}:\n{e}')
