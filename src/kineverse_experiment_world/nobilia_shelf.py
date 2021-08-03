@@ -80,12 +80,19 @@ def create_nobilia_shelf(km, prefix, origin_pose=gm.eye(4), parent_path=Path('wo
     #   d -> delta_1 + delta_2 = delta
     #
 
+    # Calibration results
+    #
+    # Solution top hinge: cost = 0.03709980624159568 [ 0.08762252 -0.01433833  0.2858676   0.00871125]
+    # Solution bottom hinge: cost = 0.025004236048128934 [ 0.1072496  -0.01232362  0.27271013  0.00489996]
+
     opening_position = gm.Position(prefix + ('door',))
 
-    # Top hinge
-    point_a  = gm.point3(-shelf_body_depth * 0.5 - 0.5 * wall_width, 0, 0.5 * shelf_height - wall_width)
+    # Top hinge - Data taken from observation
+    body_marker_in_body = gm.translation3(0.5 * shelf_body_depth - 0.062, -0.5 * shelf_width + 0.078, 0.5 * shelf_height)
+    point_a  = gm.dot(gm.inverse_frame(body_marker_in_body), gm.point3(0.08762252, 0, -0.01433833))
     # Hinge lift arm
     point_d  = point_a + gm.vector3(-0.09, 0, -0.16)
+    point_b  = 
     length_z = gm.norm(point_a - point_d)
     
     # Zero alpha along the vertical axis
@@ -101,9 +108,13 @@ def create_nobilia_shelf(km, prefix, origin_pose=gm.eye(4), parent_path=Path('wo
 
     gamma = gamma_1 + gamma_2
 
+    top_panel_marker_in_top_panel = gm.translation3( geom_panel_top.scale[0] * 0.5 - 0.062,
+                                                    -geom_panel_top.scale[1] * 0.5 + 0.062,
+                                                     geom_panel_top.scale[2] * 0.5)
+
     tf_top_panel = gm.dot(gm.translation3(point_a[0], point_a[1], point_a[2]),
                           gm.rotation3_axis_angle(gm.vector3(0, 1, 0), opening_position + math.pi * 0.5),
-                          gm.translation3(geom_panel_top.scale[2] * 0.5 - 0.5 * wall_width, 0, 0),
+                          gm.dot(gm.translation3(0.27271013, 0, 0.00489996), gm.inverse_frame(top_panel_marker_in_top_panel)),
                           gm.rotation3_axis_angle(gm.vector3(0, 1, 0), math.pi * 0.5))
 
     rb_panel_top = RigidBody(l_prefix + ('body',), gm.dot(rb_body.pose, tf_top_panel),
@@ -132,6 +143,6 @@ def create_nobilia_shelf(km, prefix, origin_pose=gm.eye(4), parent_path=Path('wo
                                                                      gm.vector3(0, 1, 0),
                                                                      gm.eye(4),
                                                                      0,
-                                                                     math.pi * 0.8))
+                                                                     2.2))
 
 
