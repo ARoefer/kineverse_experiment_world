@@ -14,6 +14,34 @@ from kineverse.operations.urdf_operations  import RevoluteJoint
 
 NobiliaDebug = namedtuple('NobiliaDebug', ['poses', 'vectors', 'expressions'])
 
+class MarkedArticulatedObject(ArticulatedObject):
+    def __init__(self, name):
+        super(MarkedArticulatedObject, self).__init__(name)
+        self.markers = {}
+
+    @classmethod
+    def json_factory(cls, name, links, joints, markers):
+        out = cls(name)
+        out.links   = links
+        out.joints  = joints
+        out.markers = markers
+        return out
+
+    def __deepcopy__(self, memo):
+        out = type(self)(self.name)
+        memo[id(self)] = out
+        out.links  = {k: deepcopy(v) for k, v in self.links.items()}
+        out.joints = {k: deepcopy(v) for k, v in self.joints.items()}
+        out.markers = {k: deepcopy(v) for k, v in self.markers.items()}
+        return out
+
+    def __eq__(self, other):
+        if isinstance(other, MarkedArticulatedObject):
+            return self.name == other.name and self.links == other.links and self.joints == other.joints and self.markers == markers
+        return False
+
+
+
 def inner_triangle_angle(a, b, c):
   """Given the lengths of a triangle's sides, calculates the angle opposite of side c
   
@@ -29,7 +57,7 @@ def inner_triangle_angle(a, b, c):
 
 
 def create_nobilia_shelf(km, prefix, origin_pose=gm.eye(4), parent_path=Path('world')):
-    km.apply_operation(f'create {prefix}', ExecFunction(prefix, ArticulatedObject, str(prefix)))
+    km.apply_operation(f'create {prefix}', ExecFunction(prefix, MarkedArticulatedObject, str(prefix)))
 
     shelf_height = 0.72
     shelf_width  = 0.6
@@ -216,6 +244,10 @@ def create_nobilia_shelf(km, prefix, origin_pose=gm.eye(4), parent_path=Path('wo
                                                                      gm.eye(4),
                                                                      0,
                                                                      2.4))
+    m_prefix = prefix + ('markers',)
+    km.apply_operation(f'create {prefix}/markers/body', CreateValue(m_prefix + ('marker_body',), body_marker_in_body))
+    km.apply_operation(f'create {prefix}/markers/top_panel', CreateValue(m_prefix + ('marker_body',), gm.dot(rb_panel_top.pose, top_panel_marker_in_top_panel)))
+    km.apply_operation(f'create {prefix}/markers/bottom_panel', CreateValue(m_prefix + ('marker_body',), gm.dot(rb_panel_bottom.pose, bottom_panel_marker_in_bottom_panel)))
 
     return NobiliaDebug([top_hinge_in_body, 
                          gm.dot(top_hinge_in_body, 

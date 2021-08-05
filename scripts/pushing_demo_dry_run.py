@@ -5,12 +5,13 @@ import rospy
 import numpy as np
 import matplotlib.pyplot as plt
 
-from kineverse.gradients.gradient_math             import *
+import kineverse.gradients.gradient_math as gm
 from kineverse.model.paths                         import Path, CPath
 from kineverse.model.frames                        import Frame
 from kineverse.model.geometry_model                import GeometryModel, \
                                                           contact_geometry, \
-                                                          generate_contact_model
+                                                          generate_contact_model, \
+                                                          closest_distance_constraint_world
 from kineverse.motion.integrator                   import CommandIntegrator, DT_SYM
 from kineverse.motion.min_qp_builder               import TypedQPBuilder as TQPB, \
                                                           GeomQPBuilder  as GQPB, \
@@ -162,7 +163,7 @@ if __name__ == '__main__':
     km = GeometryModel()
     load_urdf(km, Path(robot), urdf_model)
     load_urdf(km, Path('kitchen'), kitchen_model)
-    create_nobilia_shelf(km, Path('nobilia'), translation3(1.2, 0, 0.8))
+    create_nobilia_shelf(km, Path('nobilia'), gm.translation3(1.2, 0, 0.8))
 
     km.clean_structure()
     km.apply_operation_before('create world', 'create {}'.format(robot), ExecFunction(Path('world'), Frame, ''))
@@ -175,7 +176,7 @@ if __name__ == '__main__':
                                create_omnibase_joint_with_symbols,
                                     CPath('world/pose'), 
                                     CPath('{}/links/{}/pose'.format(robot, urdf_model.get_root())),
-                                    vector3(0,0,1),
+                                    gm.vector3(0,0,1),
                                     1.0, 0.6, CPath(robot))
     else:
         base_op = ExecFunction(base_joint_path,
@@ -204,15 +205,15 @@ if __name__ == '__main__':
 
 
     # GOAL DEFINITION
-    eef_path = Path('{}/links/{}/pose'.format(robot, robot_link))
+    eef_path = Path(f'{robot}/links/{robot_link}/pose')
     eef_pose = km.get_data(eef_path)
-    eef_pos  = cm.pos_of(eef_pose)
+    eef_pos  = gm.pos_of(eef_pose)
 
-    print('EEF free symbols:\n  {}'.format('\n  '.join(sorted([str(s) for s in free_symbols(eef_pose)]))))
+    print('EEF free symbols:\n  {}'.format('\n  '.join(sorted([str(s) for s in gm.free_symbols(eef_pose)]))))
 
     cam_pose    = km.get_data('{}/links/head_camera_link/pose'.format(robot)) if robot != 'pr2' else km.get_data('pr2/links/head_mount_link/pose')
-    cam_pos     = cm.pos_of(cam_pose)
-    cam_forward = cm.x_of(cam_pose)
+    cam_pos     = gm.pos_of(cam_pose)
+    cam_forward = gm.x_of(cam_pose)
     cam_to_eef  = eef_pos - cam_pos
 
     kitchen_parts = ['iai_fridge_door_handle', #]
@@ -232,7 +233,7 @@ if __name__ == '__main__':
     # QP CONFIGURTION
     base_joint    = km.get_data('{}/joints/to_world'.format(robot))
     base_link     = km.get_data('{}/links/{}'.format(robot, urdf_model.get_root())) 
-    joint_symbols = [j.position for j in km.get_data('{}/joints'.format(robot)).values() if hasattr(j, 'position') and cm.is_symbol(j.position)]
+    joint_symbols = [j.position for j in km.get_data('{}/joints'.format(robot)).values() if hasattr(j, 'position') and gm.is_symbol(j.position)]
     
     robot_controlled_symbols = {gm.DiffSymbol(j) for j in joint_symbols}
     integration_rules        = None
@@ -259,9 +260,9 @@ if __name__ == '__main__':
         kitchen_path = part
         obj_pose = km.get_data(kitchen_path)
 
-        controlled_symbols = robot_controlled_symbols.union({DiffSymbol(j) for j in cm.free_symbols(obj_pose)})
+        controlled_symbols = robot_controlled_symbols.union({gm.DiffSymbol(j) for j in gm.free_symbols(obj_pose)})
         
-        start_state = {s: 0.4 for s in cm.free_symbols(obj_pose)}
+        start_state = {s: 0.4 for s in gm.free_symbols(obj_pose)}
 
         # Generate push problem
         constraints, geom_distance, coll_world, debug_draw = generate_push_closing(km, 
@@ -273,25 +274,26 @@ if __name__ == '__main__':
                                                                                    kitchen_path[:-1],
                                                                                    use_geom_circulation)
 
-        start_state.update({s: 0.0 for s in cm.free_symbols(coll_world)})
-        start_state.update({s: 2.2 for s in cm.free_symbols(obj_pose)})
+        start_state.update({s: 0.0 for s in gm.free_symbols(coll_world)})
+        start_state.update({s: 2.2 for s in gm.free_symbols(obj_pose)})
         controlled_values, constraints = generate_controlled_values(constraints, controlled_symbols)
         controlled_values = depth_weight_controlled_values(km, controlled_values, exp_factor=1.0)
         
-        print(len(controlled_symbols))
+        # print(len(controlled_symbols))
 
         if isinstance(base_joint, DiffDriveJoint):
           controlled_values[str(base_joint.l_wheel_vel)].weight_id = 0.002
           controlled_values[str(base_joint.r_wheel_vel)].weight_id = 0.002
 
         # CAMERA STUFF
-        cam_to_obj = cm.pos_of(obj_pose) - cam_pos
-        look_goal  = 1 - (dot_product(cam_to_obj, cam_forward) / norm(cam_to_obj))
+        cam_to_obj = gm.pos_of(obj_pose) - cam_pos
+        look_goal  = 1 - (gm.dot_product(cam_to_obj, cam_forward) / gm.norm(cam_to_obj))
 
         # GOAL CONSTAINT GENERATION
         goal_constraints = {'reach_point': PIDC(geom_distance, geom_distance, 1, k_i=0.01),
-                            'look_at_obj':   SC(   -look_goal,    -look_goal, 1, look_goal)}
-        goal_constraints.update({'open_object_{}'.format(x): PIDC(s, s, 1) for x, s in enumerate(cm.free_symbols(obj_pose))})
+                            'look_at_obj':   SC(   -look_goal,    -look_goal, 1, look_goal),
+                            'avoid_collisions': SC.from_constraint(closest_distance_constraint_world(eef_pose, eef_path[:-1], 0.03), 100)}
+        goal_constraints.update({f'open_object_{x}': PIDC(s, s, 1) for x, s in enumerate(gm.free_symbols(obj_pose))})
 
         in_contact = gm.less_than(geom_distance, 0.01)
         
@@ -319,12 +321,12 @@ if __name__ == '__main__':
 
 
         # RUN
-        int_factor = 0.1
+        int_factor = 0.02
         integrator.restart('{} Cartesian Goal Example'.format(robot))
-        print('\n'.join('{}: {}'.format(s, r) for s, r in integrator.integration_rules.items()))
+        # print('\n'.join('{}: {}'.format(s, r) for s, r in integrator.integration_rules.items()))
         try:
             start = Time.now()
-            integrator.run(int_factor, 500, logging=False, real_time=True)
+            integrator.run(int_factor, 500, logging=False, real_time=False)
             total_dur.append((Time.now() - start).to_sec())
             n_iter.append(integrator.current_iteration + 1)
         except Exception as e:

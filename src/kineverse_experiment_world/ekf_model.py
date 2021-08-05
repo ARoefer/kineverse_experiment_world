@@ -16,6 +16,18 @@ class EKFModel(object):
     DT_SYM = gm.Symbol('dt')
 
     def __init__(self, observations, constraints, Q=None, transition_rules=None):
+        """Sets up an EKF estimating the underlying state of a set of observations.
+        
+        Args:
+            observations (dict): A dict of observations. Names are mapped to 
+                                 any kind of symbolic expression/matrix
+            constraints (dict): A dict of named constraints that govern the 
+                                configuration space of the estimated quantities
+            Q (matrix, optional): Process noise of the estimated quantities. 
+                                  Note: Quantities are expected to be ordered alphabetically
+            transition_rules (dict, optional): Maps symbols to their transition rule.
+                                               Rules will be generated automatically, if not provided here.
+        """
         state_vars = union([gm.free_symbols(o) for o in observations.values()])
 
         self.ordered_vars = [s for _, s in sorted((str(s), s) for s in state_vars)]
@@ -90,22 +102,72 @@ class EKFModel(object):
                                      [-np.pi, np.pi] for s in self.ordered_vars])
         self.R = None # np.zeros((len(self.obs_labels), len(self.obs_labels)))
 
+    def gen_control_vector(self, control_dict):
+        """Generates a control vector from a given dict mapping symbols to values
+        
+        Args:
+            control_dict (dict): Map symbol -> float
+
+        Returns:
+            np.ndarray: Vectorized constrol
+        """
+        return np.array([control_dict[s] for s in self.ordered_controls])
+
     def gen_obs_vector(self, obs_dict):
+        """Generates a flat vector of observations from a dictionary of them.
+        
+        Args:
+            obs_dict (dict): Dict of observations. Names need to match those 
+                             given to __init__
+        Returns:
+            np.ndarray: Flat vector of observations
+        """
         return np.hstack([np.take(obs_dict[l], i) for l, i in self.takers])
 
     def pandas_R(self):
+        """Returns the measurement covariance matrix as pandas frame.
+        
+        Returns:
+            pd.DataFrame: Measurement covariance as DataFrame if matrix is stored.
+                          None otherwise.
+        """
         if self.R is None:
             return None
         return pd.DataFrame(data=self.R, index=self.obs_labels, columns=self.obs_labels)
 
     @profile
     def predict(self, state_t, Sigma_t, control, dt=0.05):
+        """Predicts the next state and covariance from current state, covariance, and
+           control signal.
+        
+        Args:
+            state_t (np.ndarray): Current state vector
+            Sigma_t (np.ndarray): Current covariance
+            control (nd.ndarray): Current control vector
+            dt (float, optional): Size of the prediction step
+        
+        Returns:
+            (np.ndarray, np.ndarray): predicted_state, predicted_covariance
+        """
         params = np.hstack(([dt], state_t, control))
         F_t    = self.g_prime_fn.call2(params)
         return self.g_fn.call2(params), F_t.dot(Sigma_t.dot(F_t.T)) + self.Q
 
     @profile
     def update(self, state_t, Sigma_t, obs_t):
+        """Performs the kalman update.
+        
+        Args:
+            state_t (np.ndarray): Current state
+            Sigma_t (np.ndarray): Current covariance
+            obs_t (np.ndarray): Current observation
+        
+        Returns:
+            (np.ndarray, np.ndarray): Updated state, updated covariance
+        
+        Raises:
+            Exception: Will raise an exception if the measurement covariance R is not set
+        """
         if self.R is None:
             raise Exception('No noise model set for EKF model.')
 
@@ -121,15 +183,32 @@ class EKFModel(object):
             return state_t, Sigma_t
 
     def set_R(self, R):
+        """Set the measurement covariance matrix R
+        
+        Args:
+            R (np.ndarray): Measurement covariance matrix
+        """
         self.R = R
 
     @profile
     def generate_R(self, noisy_observations):
+        """Generates the covariance matrix from a set of noisy observations.
+           Once generated, the matrix will be stored in the model.
+        
+        Args:
+            noisy_observations ([dict]): List of observation dictionaries.
+        """
         obs = np.vstack([self.gen_obs_vector(obs) for obs in noisy_observations])
         cov = np.cov(obs.T)
         self.set_R(cov)
 
     def spawn_particle(self):
+        """Spawns a particle initialized to be in the center of the configuration space.
+           The covariance is initialized as variance of the observed quantities.
+        
+        Returns:
+            Particle: A particle modeling an estimate of the state of this model
+        """
         return Particle((self.state_bounds.T[0] + self.state_bounds.T[1]) * 0.5,
                         np.diag(self.state_bounds.T[1] - self.state_bounds.T[0]) ** 2)
 
