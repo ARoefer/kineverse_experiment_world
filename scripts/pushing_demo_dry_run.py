@@ -39,6 +39,7 @@ from kineverse.visualization.plotting              import draw_recorders,  \
 from kineverse.visualization.trajectory_visualizer import TrajectoryVisualizer
 
 from kineverse_experiment_world.push_demo_base     import generate_push_closing
+from kineverse_experiment_world.nobilia_shelf      import create_nobilia_shelf
 
 from trajectory_msgs.msg import JointTrajectory as JointTrajectoryMsg
 
@@ -119,6 +120,7 @@ if __name__ == '__main__':
     km = GeometryModel()
     load_urdf(km, Path(robot), urdf_model)
     load_urdf(km, Path('kitchen'), kitchen_model)
+    create_nobilia_shelf(km, Path('nobilia'), translation3(1.2, 0, 0.8))
 
     km.clean_structure()
     km.apply_operation_before('create world', 'create {}'.format(robot), ExecFunction(Path('world'), Frame, ''))
@@ -171,19 +173,19 @@ if __name__ == '__main__':
     cam_forward = cm.x_of(cam_pose)
     cam_to_eef  = eef_pos - cam_pos
 
-    parts = ['iai_fridge_door_handle', #]
-             'fridge_area_lower_drawer_handle',#]
-             'oven_area_area_left_drawer_handle',#]
-             'oven_area_area_middle_lower_drawer_handle',
-             'oven_area_area_middle_upper_drawer_handle',
-             'oven_area_area_right_drawer_handle',
-             'oven_area_oven_door_handle',
-             'sink_area_dish_washer_door_handle',
-             'sink_area_left_bottom_drawer_handle',
-             'sink_area_left_middle_drawer_handle',
-             'sink_area_left_upper_drawer_handle',
-             'sink_area_trash_drawer_handle'
-             ]
+    kitchen_parts = ['iai_fridge_door_handle', #]
+                     'fridge_area_lower_drawer_handle',#]
+                     'oven_area_area_left_drawer_handle',#]
+                     'oven_area_area_middle_lower_drawer_handle',
+                     'oven_area_area_middle_upper_drawer_handle',
+                     'oven_area_area_right_drawer_handle',
+                     'oven_area_oven_door_handle',
+                     'sink_area_dish_washer_door_handle',
+                     'sink_area_left_bottom_drawer_handle',
+                     'sink_area_left_middle_drawer_handle',
+                     'sink_area_left_upper_drawer_handle',
+                     'sink_area_trash_drawer_handle'
+                    ]
     
     # QP CONFIGURTION
     base_joint    = km.get_data('{}/joints/to_world'.format(robot))
@@ -210,9 +212,9 @@ if __name__ == '__main__':
     n_iter    = []
     total_dur = []
 
-    for part in parts:
+    for part in [Path(f'nobilia/links/handle/pose')]: # + [Path(f'kitchen/links/{p}/pose') for p in kitchen_parts]:
         print('Planning trajectory for "{}"'.format(part))
-        kitchen_path = Path('kitchen/links/{}/pose'.format(part))
+        kitchen_path = part
         obj_pose = km.get_data(kitchen_path)
 
         controlled_symbols = robot_controlled_symbols.union({DiffSymbol(j) for j in cm.free_symbols(obj_pose)})
@@ -230,7 +232,7 @@ if __name__ == '__main__':
                                                                                    use_geom_circulation)
 
         start_state.update({s: 0.0 for s in cm.free_symbols(coll_world)})
-        start_state.update({s: 0.4 for s in cm.free_symbols(obj_pose)})
+        start_state.update({s: 2.2 for s in cm.free_symbols(obj_pose)})
         controlled_values, constraints = generate_controlled_values(constraints, controlled_symbols)
         controlled_values = depth_weight_controlled_values(km, controlled_values, exp_factor=1.1)
         
@@ -277,7 +279,7 @@ if __name__ == '__main__':
         integrator.restart('{} Cartesian Goal Example'.format(robot))
         try:
             start = Time.now()
-            integrator.run(int_factor, 500, logging=False)
+            integrator.run(int_factor, 500, logging=False, real_time=True)
             total_dur.append((Time.now() - start).to_sec())
             n_iter.append(integrator.current_iteration + 1)
         except Exception as e:
