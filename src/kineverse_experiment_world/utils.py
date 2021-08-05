@@ -70,3 +70,13 @@ def random_normal_offset(n_points, mean, std):
 
 def random_normal_translation(n_points, mean, std):
     return [np_translation3(*row) for row in np_random_normal_offset(n_points, mean, std)]
+
+def str2bool(v):
+    if isinstance(v, bool):
+       return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')

@@ -3,10 +3,12 @@ import os
 import argparse
 import rospy
 import numpy as np
+import matplotlib.pyplot as plt
 
 import kineverse.gradients.gradient_math as gm
 
-from kineverse.model.paths                         import Path
+from kineverse.model.paths                         import Path, \
+                                                          symbol_path_separator as SPS
 from kineverse.model.frames                        import Frame
 from kineverse.model.geometry_model                import GeometryModel, \
                                                           contact_geometry, \
@@ -35,7 +37,8 @@ from kineverse.visualization.bpb_visualizer        import ROSBPBVisualizer
 from kineverse.visualization.plotting              import draw_recorders,  \
                                                           split_recorders, \
                                                           convert_qp_builder_log, \
-                                                          filter_contact_symbols
+                                                          filter_contact_symbols, \
+                                                          ColorGenerator
 from kineverse.visualization.trajectory_visualizer import TrajectoryVisualizer
 
 from kineverse_experiment_world.push_demo_base     import generate_push_closing
@@ -99,6 +102,9 @@ def str2bool(v):
         return False
     else:
         raise argparse.ArgumentTypeError('Boolean value expected.')
+
+def wait_to_continue(dt, cmd):
+    bla = raw_input('Press enter for next step.')
 
 if __name__ == '__main__':
     rospy.init_node('kineverse_sandbox')
@@ -198,17 +204,17 @@ if __name__ == '__main__':
       cam_to_eef  = eef_pos - cam_pos
 
     parts = ['iai_fridge_door_handle', #]
-             'fridge_area_lower_drawer_handle',#]
-             'oven_area_area_left_drawer_handle',#]
-             'oven_area_area_middle_lower_drawer_handle',
-             'oven_area_area_middle_upper_drawer_handle',
-             'oven_area_area_right_drawer_handle',
-             'oven_area_oven_door_handle',
-             'sink_area_dish_washer_door_handle',
-             'sink_area_left_bottom_drawer_handle',
-             'sink_area_left_middle_drawer_handle',
-             'sink_area_left_upper_drawer_handle',
-             'sink_area_trash_drawer_handle'
+             # 'fridge_area_lower_drawer_handle',#]
+             # 'oven_area_area_left_drawer_handle',#]
+             # 'oven_area_area_middle_lower_drawer_handle',
+             # 'oven_area_area_middle_upper_drawer_handle',
+             # 'oven_area_area_right_drawer_handle',
+             # 'oven_area_oven_door_handle',
+             # 'sink_area_dish_washer_door_handle',
+             # 'sink_area_left_bottom_drawer_handle',
+             # 'sink_area_left_middle_drawer_handle',
+             # 'sink_area_left_upper_drawer_handle',
+             # 'sink_area_trash_drawer_handle'
              ] # oven_area_area_left_drawer_handle
     
     # QP CONFIGURTION
@@ -286,35 +292,77 @@ if __name__ == '__main__':
         else:
             qpb = GQPB(coll_world, constraints, goal_constraints, controlled_values)
 
+        start_state.update({c.symbol: 0.0 for c in controlled_values.values()})
+
         qpb._cb_draw = debug_draw
         integrator = CommandIntegrator(qpb,
                                        integration_rules,
                                        start_state=start_state,
-                                       recorded_terms={'distance': geom_distance,
-                                                       'in contact': in_contact,
-                                                       'goal': goal_constraints.values()[0].expr,
-                                                       'location_x': base_joint.x_pos,
-                                                       'location_y': base_joint.y_pos,
-                                                       'rotation_a': base_joint.a_pos})
-
+                                       recorded_terms={# cn: c.symbol for cn, c in controlled_values.items()
+                                                       # 'distance': geom_distance,
+                                                       # 'in contact': in_contact,
+                                                       # 'goal': goal_constraints.values()[0].expr,
+                                                       # 'location_x': base_joint.x_pos,
+                                                       # 'location_y': base_joint.y_pos,
+                                                       # 'rotation_a': base_joint.a_pos
+                                                       })
+        # integrator._post_update = wait_to_continue
 
         # RUN
         int_factor = 0.1
         integrator.restart('{} Cartesian Goal Example'.format(robot))
+        print('\n'.join('{}: {}'.format(s, r) for s, r in integrator.integration_rules.items()))
         try:
           start = Time.now()
-          integrator.run(int_factor, 500)
+          integrator.run(int_factor, 400)
           total_dur.append((Time.now() - start).to_sec())
           n_iter.append(integrator.current_iteration + 1)
         except Exception as e:
-            print(e)
+            print('Exception during integration:\n{}'.format(e))
+
+
 
         # DRAW
         print('Drawing recorders')
-        draw_recorders([filter_contact_symbols(integrator.recorder, integrator.qp_builder), integrator.sym_recorder], 4.0/9.0, 8, 4).savefig('{}/{}_sandbox_{}_plots.png'.format(plot_dir, robot, part))
+        clean_recorder = filter_contact_symbols(integrator.recorder, integrator.qp_builder)
+        clean_recorder.title = None
+        clean_recorder.set_xtitle('Iteration')
+        clean_recorder.set_ytitle('Velocity')
+        clean_recorder.data = {s.split(SPS)[1]: d for s, d in clean_recorder.data.items() if 'velocity' in s and max(d) - min(d) > 0.01}
+        clean_recorder.data_lim = {}
+        clean_recorder.compute_limits()
+        clean_recorder.set_xspace(-5, 100)
+        # clean_recorder.set_xlabels([])
+        integrator.sym_recorder.title = None
+        integrator.sym_recorder.set_ytitle('In Contact')
+        integrator.sym_recorder.set_ylabels(([0.0, 1.0], ['no', 'yes']))
+        integrator.sym_recorder.set_xtitle('Iteration')
+
+        print('\n'.join('{}: {}'.format(s, d[:2]) for s, d in clean_recorder.data.items()))
+
         if PANDA_LOGGING:
             rec_w, rec_b, rec_c, recs = convert_qp_builder_log(integrator.qp_builder)
-            draw_recorders([rec_b, rec_c] + [r for _, r in sorted(recs.items())], 1, 8, 4).savefig('{}/{}_sandbox_{}_constraints.png'.format(plot_dir, robot, part))
+            rec_c.title = 'Joint Velocity Commands'
+            rec_c.data = {s.split(SPS)[1]: d for s, d in rec_c.data.items() if s.split(SPS)[1] in start_poses['pr2']}
+            print(rec_c.data)
+            color_gen = ColorGenerator(v=1.0, s_lb=0.75)
+            rec_c.colors = {s: color_gen.get_color_hex() for s in rec_c.data.keys()}
+            rec_c.data_lim = {}
+            rec_c.compute_limits()
+            rec_c.set_xtitle('Iteration')
+            rec_c.set_grid(True)
+            rec_c.set_xspace(-5, integrator.current_iteration + 5)
+            rec_c.set_legend_location('upper left')
+            fig = plt.figure(figsize=(4, 2.5))
+            ax  = fig.add_subplot(1, 1, 1)
+            rec_c.plot(ax)
+            # ax.get_legend().loc = 'upper right'
+            # ax.get_legend().bbox_to_anchor = (1.0, 0.0)
+            fig.tight_layout()
+            fig.savefig('{}/{}_sandbox_{}_plots.png'.format(plot_dir, robot, part))
+
+            # draw_recorders([rec_c], 0.5, 4, 2.5).savefig('{}/{}_sandbox_{}_plots.png'.format(plot_dir, robot, part))
+            # draw_recorders([rec_b, rec_c] + [r for _, r in sorted(recs.items())], 1, 8, 4).savefig('{}/{}_sandbox_{}_constraints.png'.format(plot_dir, robot, part))
 
         if args.vis_plan == 'after':
             traj_vis.visualize(integrator.recorder.data, hz=50)

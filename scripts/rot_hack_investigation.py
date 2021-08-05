@@ -21,7 +21,7 @@ OptResult = namedtuple('OptResult', ['error_9d', 'error_axa', 'x', 'y', 'z', 'n_
 TotalResults = namedtuple('TotalResults', ['errors_9d', 'errors_axa', 'iterations'])
 
 def rot_goal_non_hack(r_ctrl, r_goal):
-    axis, angle   = axis_angle_from_matrix(rot_of(r_ctrl).T * rot_of(r_goal))
+    axis, angle   = axis_angle_from_matrix(dot(rot_of(r_ctrl).T, rot_of(r_goal)))
     r_rot_control = axis * angle
 
     r_dist = norm(r_rot_control)
@@ -30,12 +30,12 @@ def rot_goal_non_hack(r_ctrl, r_goal):
 
 
 def rot_goal_hack(r_ctrl, r_goal):
-    axis, angle   = axis_angle_from_matrix(rot_of(r_ctrl).T * rot_of(r_goal))
+    axis, angle   = axis_angle_from_matrix(dot(rot_of(r_ctrl).T, rot_of(r_goal)))
     r_rot_control = axis * angle
 
     hack = rotation3_axis_angle([0, 0, 1], 0.0001)
 
-    axis, angle = axis_angle_from_matrix((rot_of(r_ctrl).T * (rot_of(r_ctrl) * hack)).T)
+    axis, angle = axis_angle_from_matrix(dot(rot_of(r_ctrl).T, rot_of(r_ctrl), hack).T)
     c_aa = (axis * angle)
 
     r_dist = norm(r_rot_control - c_aa)
@@ -43,7 +43,7 @@ def rot_goal_hack(r_ctrl, r_goal):
     return {'Align rotation hack':  SC(-r_dist, -r_dist, 1, r_dist)}
 
 def rot_goal_9D(r_ctrl, r_goal):
-    r_dist = norm(list(r_ctrl[:3, :3] - r_goal[:3, :3]))
+    r_dist = norm((r_ctrl[:3, :3] - r_goal[:3, :3]).elements())
     return {'Align rotation 9d': SC(-r_dist, -r_dist, 1, r_dist)}
 
 if __name__ == '__main__':
@@ -54,11 +54,13 @@ if __name__ == '__main__':
 
     methods = {f.func_name: f for f in [rot_goal_hack, rot_goal_non_hack, rot_goal_9D]}
     rs = {}
+    rs_eval = {}
 
     s_x, s_y, s_z = [Position(x) for x in 'xyz']
     for k in methods.keys():
         a = vector3(s_x, s_y, s_z)
         rs[k] = rotation3_axis_angle(a / (norm(a) + 1e-4), norm(a))
+        rs_eval[k] = cm.speed_up(rs[k], free_symbols(rs[k]))
 
     results = []
 
@@ -72,32 +74,32 @@ if __name__ == '__main__':
 
             integrator = CommandIntegrator(TQPB({}, 
                                                 constraints, 
-                                                {str(s): CV(-1, 1, DiffSymbol(s), 1e-3) for s in sum([list(c.expr.free_symbols) 
+                                                {str(s): CV(-1, 1, DiffSymbol(s), 1e-3) for s in sum([list(free_symbols(c.expr)) 
                                                                                             for c in constraints.values()], [])}),
                                                 start_state={s_x: 1, s_y: 0, s_z: 0}, equilibrium=0.001)#,
                                                 # recorded_terms=recorded_terms)
             integrator.restart('Convergence Test {} {}'.format(x, k))
-            try:
-                t_start = Time.now()
-                integrator.run(step, 100)
-                t_per_it = (Time.now() - t_start).to_sec() / integrator.current_iteration
-                final_r  = r_ctrl.subs(integrator.state)
-                final_ax, final_a = axis_angle_from_matrix(final_r)
-                final_axa = final_ax * final_a
-                error_9d  = sum([np.abs(float(x)) for x in list(final_r - r_goal)])
-                error_axa_sym = norm(final_axa - goal_axa)
-                # print(final_ax, final_a, type(final_a))
-                error_axa = float(error_axa_sym)
-                t_results[k] = OptResult(error_9d,
-                                         error_axa, 
-                                         integrator.recorder.data['x_p'], 
-                                         integrator.recorder.data['y_p'], 
-                                         integrator.recorder.data['z_p'], 
-                                         integrator.current_iteration,
-                                         t_per_it)
-            except QPSolverException:
-                print('Solver Exception')
-                t_results[k] = None
+            # try:
+            t_start = Time.now()
+            integrator.run(step, 100)
+            t_per_it = (Time.now() - t_start).to_sec() / integrator.current_iteration
+            final_r  = rs_eval[k](**{str(s): v for s, v in integrator.state.items()})
+            final_ax, final_a = axis_angle_from_matrix(final_r)
+            final_axa = final_ax * final_a
+            error_9d  = sum([np.abs(float(x)) for x in (final_r - r_goal).elements()])
+            error_axa_sym = norm(final_axa - goal_axa)
+            # print(final_ax, final_a, type(final_a))
+            error_axa = float(error_axa_sym)
+            t_results[k] = OptResult(error_9d,
+                                     error_axa,
+                                     integrator.recorder.data[str(s_x)],
+                                     integrator.recorder.data[str(s_y)],
+                                     integrator.recorder.data[str(s_z)],
+                                     integrator.current_iteration,
+                                     t_per_it)
+            # except QPSolverException:
+            #     print('Solver Exception')
+            #     t_results[k] = None
         
         # print('\n'.join([str(d) for k, d in sorted(integrator.sym_recorder.data.items())]))
         # final_r1 = r1.subs(integrator.state)
@@ -186,5 +188,5 @@ if __name__ == '__main__':
     print(df)
     df.to_csv('rotation_comparison.csv', float_format='%.4f', index=False)
 
-    # draw_recorders([rpy_integrator.recorder, ax_integrator.recorder, 
-    #                 rpy_integrator.sym_recorder, ax_integrator.sym_recorder], 1, 4, 4).savefig('{}/rpy_vs_axis_angle.png'.format(res_pkg_path('package://kineverse_experiment_world/test'))
+    draw_recorders([rpy_integrator.recorder, ax_integrator.recorder, 
+                    rpy_integrator.sym_recorder, ax_integrator.sym_recorder], 1, 4, 4).savefig('{}/rpy_vs_axis_angle.png'.format(res_pkg_path('package://kineverse_experiment_world/test')))
