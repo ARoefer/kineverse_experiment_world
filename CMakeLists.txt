@@ -55,6 +55,7 @@ catkin_python_setup()
 add_message_files(
   FILES
   PoseStampedArray.msg
+  TransformStampedArray.msg
 )
 
 ## Generate services in the 'srv' folder
