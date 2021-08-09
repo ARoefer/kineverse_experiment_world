@@ -6,7 +6,7 @@
   <xacro:include filename="$(find iai_wsg_50_description)/urdf/wsg_50.urdf.xacro"/>
 
   <xacro:wsg_50_xacro name="wsg_50" parent="tool0">
-    <pose xyz="0 0 0" rpy="0 0 0" />
+    <pose xyz="0 0 0" rpy="0 0 0.78539816339" />
   </xacro:wsg_50_xacro>
 
 </robot>

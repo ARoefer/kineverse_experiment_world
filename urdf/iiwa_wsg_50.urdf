@@ -184,7 +184,7 @@
     <child link="base"/>
   </joint>
   <joint name="wsg_50_anterior_gripper_joint" type="fixed">
-    <pose rpy="0 0 0" xyz="0 0 0"/>
+    <pose rpy="0 0 0.78539816339" xyz="0 0 0"/>
     <parent link="tool0"/>
     <child link="wsg_50_base_link"/>
   </joint>
