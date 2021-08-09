@@ -3,6 +3,7 @@ import math
 import kineverse.gradients.gradient_math as gm
 
 from collections import namedtuple
+from kineverse.model.frames         import Frame
 from kineverse.model.paths          import Path, CPath
 from kineverse.model.geometry_model import ArticulatedObject, \
                                            Box, Mesh, Cylinder, Sphere, \
@@ -245,9 +246,18 @@ def create_nobilia_shelf(km, prefix, origin_pose=gm.eye(4), parent_path=Path('wo
                                                                      0,
                                                                      2.4))
     m_prefix = prefix + ('markers',)
-    km.apply_operation(f'create {prefix}/markers/body', CreateValue(m_prefix + ('marker_body',), body_marker_in_body))
-    km.apply_operation(f'create {prefix}/markers/top_panel', CreateValue(m_prefix + ('marker_body',), gm.dot(rb_panel_top.pose, top_panel_marker_in_top_panel)))
-    km.apply_operation(f'create {prefix}/markers/bottom_panel', CreateValue(m_prefix + ('marker_body',), gm.dot(rb_panel_bottom.pose, bottom_panel_marker_in_bottom_panel)))
+    km.apply_operation(f'create {prefix}/markers/body',         ExecFunction(m_prefix + ('body',), Frame,
+                                                                                                   CPath(l_prefix + ('body', )),
+                                                                                                   gm.dot(rb_body.pose, body_marker_in_body), 
+                                                                                                   body_marker_in_body))
+    km.apply_operation(f'create {prefix}/markers/top_panel',    ExecFunction(m_prefix + ('top_panel',), Frame, 
+                                                                                                        CPath(l_prefix + ('panel_top', )),
+                                                                                                        gm.dot(rb_panel_top.pose, top_panel_marker_in_top_panel), 
+                                                                                                        top_panel_marker_in_top_panel))
+    km.apply_operation(f'create {prefix}/markers/bottom_panel', ExecFunction(m_prefix + ('bottom_panel',), Frame, 
+                                                                                                           CPath(l_prefix + ('panel_bottom', )),
+                                                                                                           gm.dot(rb_panel_bottom.pose, bottom_panel_marker_in_bottom_panel),
+                                                                                                           bottom_panel_marker_in_bottom_panel))
 
     return NobiliaDebug([top_hinge_in_body, 
                          gm.dot(top_hinge_in_body, 
