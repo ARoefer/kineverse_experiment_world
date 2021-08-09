@@ -293,7 +293,7 @@ if __name__ == '__main__':
     n_iter    = []
     total_dur = []
 
-    for part in [Path(f'nobilia/links/handle/pose')]: # + [Path(f'kitchen/links/{p}/pose') for p in kitchen_parts]:
+    for part in [Path(f'kitchen/links/{p}/pose') for p in kitchen_parts] + [Path(f'nobilia/links/handle/pose')]:
         print('Planning trajectory for "{}"'.format(part))
         kitchen_path = part
         obj_pose = km.get_data(kitchen_path)
@@ -315,7 +315,7 @@ if __name__ == '__main__':
                                                                                    use_geom_circulation)
 
         start_state.update({s: 0.0 for s in gm.free_symbols(coll_world)})
-        start_state.update({s: 2.2 for s in gm.free_symbols(obj_pose)})
+        start_state.update({s: 0.4 for s in gm.free_symbols(obj_pose)})
         controlled_values, constraints = generate_controlled_values(constraints, controlled_symbols)
         controlled_values = depth_weight_controlled_values(km, controlled_values, exp_factor=1.0)
 
@@ -333,7 +333,8 @@ if __name__ == '__main__':
         # GOAL CONSTAINT GENERATION
         goal_constraints = {'reach_point': PIDC(geom_distance, geom_distance, 1, k_i=0.01),
                             'look_at_obj':   SC(   -look_goal,    -look_goal, 1, look_goal),
-                            'avoid_collisions': SC.from_constraint(closest_distance_constraint_world(eef_pose, eef_path[:-1], 0.03), 100)}
+                            'avoid_collisions': SC.from_constraint(closest_distance_constraint_world(eef_pose, eef_path[:-1], 0.03), 100)
+                            }
 
         # EXERT SUFICIENT FORCE
         if False and robot in torque_limits:
