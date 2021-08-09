@@ -29,9 +29,9 @@ from kineverse.visualization.plotting       import draw_recorders,  \
                                                    split_recorders, \
                                                    convert_qp_builder_log, \
                                                    filter_contact_symbols
-from kineverse.utils import res_pkg_path
+from kineverse.utils import res_pkg_path, real_quat_from_matrix
 
-from kineverse_tools.ik_solver import ik_solve_one_shot
+from kineverse_tools.ik_solver import ik_solve_one_shot, IKSolver
 
 
 from urdf_parser_py.urdf import URDF
@@ -184,8 +184,15 @@ if __name__ == '__main__':
                        gm.translation3(-0.08, 0.1, 0),
                        gm.rotation3_rpy(0, math.pi * 0.5,0))
 
-    for x_coord in np.linspace(0.5, 1.0, 4):
-        for y_coord in np.linspace(0.2, -0.8, 4):
+    ik_solver = IKSolver(km, eef.pose, visualizer)
+
+    # Working config is 
+    #    x:  0.8333333333333333 
+    #    y: -0.1333333333333333
+
+    for x_coord in [0.8]: #np.linspace(0.5, 1.0, 4):
+        for y_coord in [-0.1]: #np.linspace(0.2, -0.8, 4):
+            print(f'Config is ({x_coord}, {y_coord})')
             ik_goal_start = {s: 0 for s in world.free_symbols}
             ik_goal_start[door_x] = x_coord
             ik_goal_start[door_y] = y_coord
@@ -210,6 +217,7 @@ if __name__ == '__main__':
             controlled_values, constraints = generate_controlled_values(km.get_constraints_by_symbols(controlled_symbols.union(active_symbols)),
                                                                         controlled_symbols)
 
+            # Static grasp goal
             goal_grasp_lin = SoftConstraint(-grasp_err_lin, -grasp_err_lin, 100.0, grasp_err_lin)
             goal_grasp_ang = SoftConstraint(-grasp_err_rot, -grasp_err_rot, 10.0, grasp_err_rot)
 
@@ -218,56 +226,78 @@ if __name__ == '__main__':
             goal_handle_angle = SoftConstraint(math.pi * 0.25 - handle_position, 
                                                math.pi * 0.25 - handle_position, 1.0, handle_position)
 
+            # Dynamic grasp goal
+            ordered_active_symbols = list(active_symbols)
+            goal_lin_vel = gm.vector3(gm.get_diff(gm.pos_of(goal_pose)[0], controlled_symbols),
+                                      gm.get_diff(gm.pos_of(goal_pose)[1], controlled_symbols),
+                                      gm.get_diff(gm.pos_of(goal_pose)[2], controlled_symbols))
+
+            eef_lin_vel  = gm.vector3(gm.get_diff(gm.pos_of(eef.pose)[0],  controlled_symbols),
+                                      gm.get_diff(gm.pos_of(eef.pose)[1],  controlled_symbols),
+                                      gm.get_diff(gm.pos_of(eef.pose)[2],  controlled_symbols))
+
+            lin_vel_alignment    = gm.dot_product(goal_lin_vel, eef_lin_vel)
+            goal_lin_vel_sq_norm = gm.dot(eef_lin_vel.T, eef_lin_vel)
+            goal_lin_vel_alignment = SoftConstraint(goal_lin_vel_sq_norm - lin_vel_alignment, 
+                                                    goal_lin_vel_sq_norm - lin_vel_alignment, 2, lin_vel_alignment)
+
             qp = GQPB(world, 
                       constraints,
                       {'grasp_constraint_lin': goal_grasp_lin,
                        'grasp_constraint_ang': goal_grasp_ang,
                        'goal_door_angle':   goal_door_angle,
-                       'goal_handle_angle': goal_handle_angle},
+                       'goal_handle_angle': goal_handle_angle,
+                       # 'goal_lin_vel_alignment': goal_lin_vel_alignment
+                       },
                       controlled_values,
                       visualizer=visualizer)
 
 
             is_unlocked = gm.alg_and(gm.greater_than(door_position, 0.4), gm.less_than(handle_position, 0.15))
 
-            # integrator = CommandIntegrator(qp, start_state=q_ik_goal, 
-            #                                    recorded_terms={'is_unlocked': is_unlocked,
-            #                                                    'handle_position': handle_position,
-            #                                                    'door_position': door_position})
+            integrator = CommandIntegrator(qp, start_state=q_ik_goal, 
+                                               recorded_terms={'is_unlocked': is_unlocked,
+                                                               'handle_position': handle_position,
+                                                               'door_position': door_position},
+                                               printed_exprs={'is_unlocked': is_unlocked})
 
-            # try:
-            #     integrator.restart(title='Door opening generator')
-            #     integrator.run(dt=0.05, max_iterations=500, logging=True, show_progress=True, real_time=False)
+            try:
+                integrator.restart(title='Door opening generator')
+                integrator.run(dt=0.05,
+                               max_iterations=500,
+                               logging=True,
+                               show_progress=False,
+                               real_time=True)
 
-            #     draw_recorders([integrator.sym_recorder], 2, 8, 4).savefig(res_pkg_path('package://kineverse_experiment_world/plots/door_opening_terms.png'))
+                draw_recorders([integrator.sym_recorder], 2, 8, 4).savefig(res_pkg_path('package://kineverse_experiment_world/plots/door_opening_terms.png'))
 
-            #     if PANDA_LOGGING:
-            #         rec_w, rec_b, rec_c, recs = convert_qp_builder_log(integrator.qp_builder)
-            #         draw_recorders([rec_b, rec_c] + [r for _, r in sorted(recs.items())], 1, 8, 4).savefig(res_pkg_path('package://kineverse_experiment_world/plots/door_opening.png'))
-            # except Exception as e:
-            #     traceback.print_exception(type(e), e, e.__traceback__)
-            #     print(f'Motion generation crashed:\n{e}')
+                if PANDA_LOGGING:
+                    rec_w, rec_b, rec_c, recs = convert_qp_builder_log(integrator.qp_builder)
+                    draw_recorders([rec_b, rec_c] + [r for _, r in sorted(recs.items())], 1, 8, 4).savefig(res_pkg_path('package://kineverse_experiment_world/plots/door_opening.png'))
+            except Exception as e:
+                traceback.print_exception(type(e), e, e.__traceback__)
+                print(f'Motion generation crashed:\n{e}')
 
-            open_start = copy(q_ik_goal)
-            open_start[door_position] = math.pi * 0.45
-            open_start[handle_position] = math.pi * 0.25
-            err_open, q_goal_open = ik_solve_one_shot(km, eef.pose, open_start, goal_pose)
+            # open_start = copy(q_ik_goal)
+            # open_start[door_position] = math.pi * 0.45
+            # open_start[handle_position] = math.pi * 0.25
+            # err_open, q_goal_open = ik_solve_one_shot(km, eef.pose, open_start, goal_pose)
 
-            world.update_world(q_goal_open)
+            # world.update_world(q_goal_open)
 
-            visualizer.begin_draw_cycle('open_world')
-            visualizer.draw_poses('open_world', gm.eye(4), 0.2, 0.01, [gm.subs(goal_pose, open_start),
-                                                                       gm.subs(eef.pose, q_goal_open)])
-            visualizer.draw_world('open_world', world, r=0.6, b=0.6)
-            visualizer.render('open_world')    
+            # visualizer.begin_draw_cycle('open_world')
+            # visualizer.draw_poses('open_world', gm.eye(4), 0.2, 0.01, [gm.subs(goal_pose, open_start),
+            #                                                            gm.subs(eef.pose, q_goal_open)])
+            # visualizer.draw_world('open_world', world, r=0.6, b=0.6)
+            # visualizer.render('open_world')    
 
-            start = rospy.Time.now()
-            # while not rospy.is_shutdown():
-            rospy.sleep(0.3)
+            # start = rospy.Time.now()
+            # # while not rospy.is_shutdown():
+            # rospy.sleep(0.3)
 
             # print(f'IK error: {err_ik}\nOpen error: {err_open}')
 
-            bla = input('Hit enter to continue to the next config')
+            # bla = input('Hit enter to continue to the next config')
             if rospy.is_shutdown():
                 break
 
