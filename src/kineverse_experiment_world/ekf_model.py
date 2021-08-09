@@ -151,6 +151,7 @@ class EKFModel(object):
         """
         params = np.hstack(([dt], state_t, control))
         F_t    = self.g_prime_fn.call2(params)
+        # print(f'state_t: {state_t}\nSigma_t:\n{Sigma_t}\ncontrol: {control}\nparams: {params}\nF_t: {F_t}')
         return self.g_fn.call2(params), F_t.dot(Sigma_t.dot(F_t.T)) + self.Q
 
     @profile
@@ -172,7 +173,18 @@ class EKFModel(object):
             raise Exception('No noise model set for EKF model.')
 
         H_t = self.h_prime_fn.call2(state_t)
-        S_t = np.dot(H_t, np.dot(Sigma_t, H_t.T)) + self.R
+        S_t_temp = H_t.dot(Sigma_t.dot(H_t.T))
+        if np.linalg.det(S_t_temp) == 0.0:
+            # This is a hack. It does not guarantee immediate invertibility of S_t.
+            # However over multiple iterations it should become invertible
+            # I don't know what the effect on the probabilistic side of things is
+            H_t += np.random.normal(0, 0.1, H_t.shape)
+            S_t_temp = H_t.dot(Sigma_t.dot(H_t.T))
+            print('HACK')
+
+        S_t = S_t_temp + self.R
+
+        # print(f'H_t: {H_t}\nS_t:\n{S_t}')
         if np.linalg.det(S_t) != 0.0:
             K_t = Sigma_t.dot(H_t.T.dot(np.linalg.inv(S_t)))
             y_t = obs_t - self.h_fn.call2(state_t).flatten()
@@ -180,6 +192,7 @@ class EKFModel(object):
             Sigma_t = (np.eye(Sigma_t.shape[0]) - K_t.dot(H_t)).dot(Sigma_t)
             return state_t, Sigma_t
         else:
+            print('Determinant of S_t is 0')
             return state_t, Sigma_t
 
     def set_R(self, R):
