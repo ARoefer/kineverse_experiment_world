@@ -1,8 +1,12 @@
+from collections import namedtuple
+
 import kineverse.gradients.common_math as cm
 
 from kineverse.gradients.gradient_math import *
 from kineverse.model.geometry_model    import contact_geometry, \
                                               generate_contact_model
+
+PushingInternals = namedtuple('PushingInternals', ['contact_a', 'normal_b_to_a', 'f_debug_draw'])
 
 
 def sign(x):
@@ -44,4 +48,4 @@ def generate_push_closing(km, grounding_state, controlled_symbols, eef_pose, obj
         # vis.draw_vector('debug_vecs', s_object_cp, s_ortho_vel_vec, r=1, b=0)
         vis.render('debug_vecs')
 
-    return constraints, geom_distance, coll_world, debug_draw
+    return constraints, geom_distance, coll_world, PushingInternals(robot_cp, contact_normal, debug_draw)

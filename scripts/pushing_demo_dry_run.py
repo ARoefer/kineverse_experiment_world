@@ -265,7 +265,7 @@ if __name__ == '__main__':
         start_state = {s: 0.4 for s in gm.free_symbols(obj_pose)}
 
         # Generate push problem
-        constraints, geom_distance, coll_world, debug_draw = generate_push_closing(km, 
+        constraints, geom_distance, coll_world, p_internals = generate_push_closing(km, 
                                                                                    start_state, 
                                                                                    controlled_symbols,
                                                                                    eef_pose,
@@ -307,7 +307,7 @@ if __name__ == '__main__':
 
         start_state.update({c.symbol: 0.0 for c in controlled_values.values()})
 
-        qpb._cb_draw = debug_draw
+        qpb._cb_draw = p_internals.f_debug_draw
         integrator = CommandIntegrator(qpb,
                                        integration_rules,
                                        start_state=start_state,
