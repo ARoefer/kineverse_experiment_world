@@ -22,6 +22,7 @@ from kineverse.motion.min_qp_builder               import TypedQPBuilder as TQPB
                                                           PID_Constraint as PIDC, \
                                                           ControlledValue, \
                                                           PANDA_LOGGING
+from kineverse.motion.utils                        import cart_force_to_q_forces
 from kineverse.operations.basic_operations         import ExecFunction
 from kineverse.operations.urdf_operations          import load_urdf
 from kineverse.operations.special_kinematics       import create_diff_drive_joint_with_symbols, \
@@ -53,7 +54,17 @@ from urdf_parser_py.urdf import URDF
 # DONBOT: ./scripts/pushing_demo_dry_run.py --vis-plan=during --robot=iai_donbot --link=gripper_finger_right_link
 # BOXY: ./scripts/pushing_demo_dry_run.py --vis-plan=during --robot=iai_boxy --link=right_gripper_finger_right_link  --camera=head_mount_kinect2_rgb_optical_frame
 # FETCH: ./scripts/pushing_demo_dry_run.py --nav=linear --robot=fetch --vis-plan=during --omni=False
-# PR2: 
+# PR2:
+
+  # 'pr2' : {'l_elbow_flex_joint' : -2.1213,
+  #             'l_shoulder_lift_joint': 1.2963,
+  #             'l_wrist_flex_joint' : -1.05,
+  #             'r_shoulder_pan_joint': -1.2963,
+  #             'r_shoulder_lift_joint': 0,
+  #             'r_upper_arm_roll_joint': -1.2,
+  #             'r_elbow_flex_joint' : -2.1213,
+  #             'r_wrist_flex_joint' : -1.05,
+  #             'torso_lift_joint'   : 0.30}
 
 start_poses = {
   'fetch' : {'wrist_roll_joint'   : 0.0,
@@ -67,8 +78,10 @@ start_poses = {
   'pr2' : {'l_elbow_flex_joint' : -2.1213,
               'l_shoulder_lift_joint': 1.2963,
               'l_wrist_flex_joint' : -1.05,
-              'r_elbow_flex_joint' : -2.1213,
+              # 'r_shoulder_pan_joint': -1.2963,
               'r_shoulder_lift_joint': 1.2963,
+              # 'r_upper_arm_roll_joint': -1.2,
+              'r_elbow_flex_joint' : -2.1213,
               'r_wrist_flex_joint' : -1.05,
               'torso_lift_joint'   : 0.16825},
   'iai_boxy': {'neck_shoulder_pan_joint': -1.57,
@@ -93,6 +106,26 @@ start_poses = {
                'right_arm_5_joint': -0.7,
                'right_arm_6_joint': 0.01},
               }
+torque_limits = {
+    'pr2': {'l_shoulder_pan_joint' : 30,
+            'l_shoulder_lift_joint': 30,
+            'l_upper_arm_roll_joint': 30,
+            'l_elbow_flex_joint' : 30,
+            'l_forearm_roll_joint' : 30,
+            'l_wrist_flex_joint' : 10,
+            'l_wrist_roll_joint' : 10,
+
+            'r_shoulder_pan_joint' : 30,
+            'r_shoulder_lift_joint': 30,
+            'r_upper_arm_roll_joint': 30,
+            'r_forearm_roll_joint' : 30,
+            'r_elbow_flex_joint' : 30,
+            'r_wrist_flex_joint' : 10,
+            'r_wrist_roll_joint' : 10,
+
+            'torso_lift_joint'   : 10000}
+}
+
 
 def str2bool(v):
     if isinstance(v, bool):
@@ -174,14 +207,14 @@ if __name__ == '__main__':
     if robot == 'pr2' or use_omni:
         base_op = ExecFunction(base_joint_path,
                                create_omnibase_joint_with_symbols,
-                                    CPath('world/pose'), 
+                                    CPath('world/pose'),
                                     CPath('{}/links/{}/pose'.format(robot, urdf_model.get_root())),
                                     gm.vector3(0,0,1),
                                     1.0, 0.6, CPath(robot))
     else:
         base_op = ExecFunction(base_joint_path,
                                create_diff_drive_joint_with_symbols,
-                                    CPath('world/pose'), 
+                                    CPath('world/pose'),
                                     CPath('{}/links/{}/pose'.format(robot, urdf_model.get_root())),
                                     0.12 * 0.5,
                                     0.3748,
@@ -229,12 +262,12 @@ if __name__ == '__main__':
                      'sink_area_left_upper_drawer_handle',
                      'sink_area_trash_drawer_handle'
                     ]
-    
+
     # QP CONFIGURTION
-    base_joint    = km.get_data('{}/joints/to_world'.format(robot))
-    base_link     = km.get_data('{}/links/{}'.format(robot, urdf_model.get_root())) 
-    joint_symbols = [j.position for j in km.get_data('{}/joints'.format(robot)).values() if hasattr(j, 'position') and gm.is_symbol(j.position)]
-    
+    base_joint    = km.get_data(f'{robot}/joints/to_world')
+    base_link     = km.get_data(f'{robot}/links/{urdf_model.get_root()}')
+    joint_symbols = [j.position for j in km.get_data(f'{robot}/joints').values() if hasattr(j, 'position') and gm.is_symbol(j.position)]
+
     robot_controlled_symbols = {gm.DiffSymbol(j) for j in joint_symbols}
     integration_rules        = None
     if isinstance(base_joint, DiffDriveJoint):
@@ -249,7 +282,12 @@ if __name__ == '__main__':
                       base_joint.a_pos: base_joint.a_pos + DT_SYM * (base_joint.r_wheel_vel * (base_joint.wheel_radius / base_joint.wheel_distance) + base_joint.l_wheel_vel * (- base_joint.wheel_radius / base_joint.wheel_distance))}
     else:
         robot_controlled_symbols |= {gm.get_diff(x) for x in [base_joint.x_pos, base_joint.y_pos, base_joint.a_pos]}
-    
+
+    active_robot_world = km.get_active_geometry(joint_symbols)
+    # c_avoidance_constraints = {f'collision avoidance {name}': SC.from_constraint(closest_distance_constraint_world(gm.get_data(Path(name) + ('pose',)),
+    #                                                                              Path(name),
+    #                                                                              0.03), 100) for name in active_robot_world.names}
+
     print('\n'.join([str(s) for s in robot_controlled_symbols]))
 
     n_iter    = []
@@ -260,13 +298,15 @@ if __name__ == '__main__':
         kitchen_path = part
         obj_pose = km.get_data(kitchen_path)
 
+        printed_exprs = {}
+
         controlled_symbols = robot_controlled_symbols.union({gm.DiffSymbol(j) for j in gm.free_symbols(obj_pose)})
-        
+
         start_state = {s: 0.4 for s in gm.free_symbols(obj_pose)}
 
         # Generate push problem
-        constraints, geom_distance, coll_world, p_internals = generate_push_closing(km, 
-                                                                                   start_state, 
+        constraints, geom_distance, coll_world, p_internals = generate_push_closing(km,
+                                                                                   start_state,
                                                                                    controlled_symbols,
                                                                                    eef_pose,
                                                                                    obj_pose,
@@ -278,7 +318,7 @@ if __name__ == '__main__':
         start_state.update({s: 2.2 for s in gm.free_symbols(obj_pose)})
         controlled_values, constraints = generate_controlled_values(constraints, controlled_symbols)
         controlled_values = depth_weight_controlled_values(km, controlled_values, exp_factor=1.0)
-        
+
         # print(len(controlled_symbols))
 
         if isinstance(base_joint, DiffDriveJoint):
@@ -289,14 +329,31 @@ if __name__ == '__main__':
         cam_to_obj = gm.pos_of(obj_pose) - cam_pos
         look_goal  = 1 - (gm.dot_product(cam_to_obj, cam_forward) / gm.norm(cam_to_obj))
 
+
         # GOAL CONSTAINT GENERATION
         goal_constraints = {'reach_point': PIDC(geom_distance, geom_distance, 1, k_i=0.01),
                             'look_at_obj':   SC(   -look_goal,    -look_goal, 1, look_goal),
                             'avoid_collisions': SC.from_constraint(closest_distance_constraint_world(eef_pose, eef_path[:-1], 0.03), 100)}
+
+        # EXERT SUFICIENT FORCE
+        if False and robot in torque_limits:
+            torque_relevant_joints = gm.free_symbols(p_internals.contact_a).intersection(joint_symbols)
+            relevant_torque_limits = {j_sym: torque_limits[robot][Path(j_sym)[1]] for j_sym in torque_relevant_joints if Path(j_sym)[1] in torque_limits[robot]}
+            torque_ordered_joints, ordered_torque_limits = zip(*relevant_torque_limits.items())
+
+            torque_projection = cart_force_to_q_forces(p_internals.contact_a,
+                                                       -20 * p_internals.normal_b_to_a,
+                                                       torque_ordered_joints)
+            torque_bounds_delta = [t_limit - gm.abs(c) for c, t_limit in zip(torque_projection.elements(), ordered_torque_limits)]
+            for symbol, bound_delta in zip(torque_ordered_joints, torque_bounds_delta):
+                goal_constraints[f'{symbol} torque_bound'] = SC(-bound_delta, 1e9, 1, bound_delta)
+                printed_exprs[f'{symbol} torque_bound'] = bound_delta
+
+        # goal_constraints.update(c_avoidance_constraints)
         goal_constraints.update({f'open_object_{x}': PIDC(s, s, 1) for x, s in enumerate(gm.free_symbols(obj_pose))})
 
         in_contact = gm.less_than(geom_distance, 0.01)
-        
+
         if robot in start_poses:
           start_state.update({gm.Position(Path(robot) + (k,)): v  for k, v in start_poses[robot].items()})
 
@@ -317,7 +374,8 @@ if __name__ == '__main__':
                                                        'goal': next(iter(goal_constraints.values())).expr,
                                                        'location_x': base_joint.x_pos,
                                                        'location_y': base_joint.y_pos,
-                                                       'rotation_a': base_joint.a_pos})
+                                                       'rotation_a': base_joint.a_pos},
+                                       printed_exprs=printed_exprs)
 
 
         # RUN
@@ -370,7 +428,7 @@ if __name__ == '__main__':
 
     traj_vis.shutdown()
 
-    print('Mean Iter: {}\nMean Iter D: {:>2.6f}\nIter D SD: {:>2.6f}\nMean planning duration: {:>2.6f}s'.format(np.mean(n_iter), 
+    print('Mean Iter: {}\nMean Iter D: {:>2.6f}\nIter D SD: {:>2.6f}\nMean planning duration: {:>2.6f}s'.format(np.mean(n_iter),
                                                                  np.mean([d / float(i) for d, i in zip(total_dur, n_iter)]),
                                                                  np.std([d / float(i) for d, i in zip(total_dur, n_iter)]),
                                                                  np.mean(total_dur)))
