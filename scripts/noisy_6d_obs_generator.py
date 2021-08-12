@@ -74,7 +74,7 @@ if __name__ == '__main__':
                 trans.transform.rotation.w = quat[3]
             except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
                 print(f'Exception raised while looking up {pose_name} -> {reference_frame}:\n{e}')
-                continue
+                break
         else:
             pub_obs.publish(msg)
         
