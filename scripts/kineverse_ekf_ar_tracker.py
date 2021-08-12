@@ -4,16 +4,16 @@ import kineverse.gradients.gradient_math as gm
 import tf2_ros
 import numpy  as np
 import pandas as pd
+import math
 
-from kineverse.model.geometry_model import GeometryModel, Path, Frame
 from kineverse_msgs.msg             import ValueMap as ValueMapMsg
+from kineverse.model.geometry_model import GeometryModel, Path, Frame
 from kineverse.ros.tf_publisher     import ModelTFBroadcaster_URDF
 from kineverse.visualization.ros_visualizer import ROSVisualizer
 
 from kineverse_experiment_world.ekf_model import EKFModel
 from kineverse_experiment_world.nobilia_shelf import create_nobilia_shelf
 from kineverse_experiment_world.msg import TransformStampedArray as TransformStampedArrayMsg
-
 
 def np_frame3_quaternion(x, y, z, qx, qy, qz, qw):
     a  = [qx, qy, qz, qw]
@@ -26,6 +26,21 @@ def np_frame3_quaternion(x, y, z, qx, qy, qz, qw):
                [2 * qx * qy + 2 * qw * qz, qw2 - qx2 + qy2 - qz2, 2 * qy * qz - 2 * qw * qx, y],
                [2 * qx * qz - 2 * qw * qy, 2 * qy * qz + 2 * qw * qx, qw2 - qx2 - qy2 + qz2, z],
                [0, 0, 0, 1]])
+
+def np_6d_pose_feature(x, y, z, qx, qy, qz, qw):
+    axis_norm = np.sqrt(qx**2 + qy**2 + qz**2)
+    angle = np.arctan2(axis_norm, qw) * 2
+    print(f'Angle of quat: qw -> {math.acos(qw) * 2}, {math.asin(axis_norm) * 2}. From arctan2: {angle}')
+    if np.abs(angle) < 1e-4:
+        return [x, y, z, 0, 0, 0]
+    rotation_vector = (np.array([qx, qy, qz]) / axis_norm) * angle
+    print(f'Rotation vector: {rotation_vector} Norm: {np.sqrt(np.sum(rotation_vector**2))}')
+    return np.hstack(([x, y, z], rotation_vector))
+
+def generate_6d_feature(pose):
+    rotation = gm.rotation_vector_from_matrix(pose)
+    position = gm.pos_of(pose)
+    return gm.matrix_wrapper([position[0], position[1], position[2], rotation[0], rotation[1], rotation[2]])
 
 
 class Kineverse6DEKFTracker(object):
@@ -44,22 +59,23 @@ class Kineverse6DEKFTracker(object):
         """
         poses = {p: km.get_data(p) for p in paths_observables}
         poses = {str(p): pose.pose if isinstance(pose, Frame) else pose for p, pose in poses.items()}
-
+        # obs_features = {p: generate_6d_feature(pose) for p, pose in poses.items()}
+        obs_features = {p: pose for p, pose in poses.items()}
 
         # Identify tracking pools. All poses within one pool share at least one DoF
-        tracking_pools = [(gm.free_symbols(pose), [(p, pose)]) for p, pose in poses.items() 
-                                                                if len(gm.free_symbols(pose)) != 0]
+        tracking_pools = [(gm.free_symbols(feature), [(p, feature)]) for p, feature in obs_features.items() 
+                                                                     if len(gm.free_symbols(feature)) != 0]
 
         final_pools = []
         while len(tracking_pools) > 0:
-            syms, pose_list = tracking_pools[0]
+            syms, feature_list = tracking_pools[0]
             initial_syms_size = len(syms)
             y = 1
             while y < len(tracking_pools):
-                o_syms, o_pose_list = tracking_pools[y]
+                o_syms, o_feature_list = tracking_pools[y]
                 if len(syms.intersection(o_syms)) != 0:
                     syms = syms.union(o_syms)
-                    pose_list += o_pose_list
+                    feature_list += o_feature_list
                     del tracking_pools[y]
                 else:
                     y += 1
@@ -67,15 +83,15 @@ class Kineverse6DEKFTracker(object):
             # If the symbol set has not been enlarged, 
             # there is no more overlap with other pools
             if len(syms) == initial_syms_size:
-                final_pools.append((syms, pose_list))
+                final_pools.append((syms, feature_list))
                 tracking_pools = tracking_pools[1:]
             else:
-                tracking_pools[0] = (syms, pose_list)
+                tracking_pools[0] = (syms, feature_list)
 
         tracking_pools = final_pools
-        self.ekfs = [EKFModel(dict(poses), 
+        self.ekfs = [EKFModel(dict(features), 
                               km.get_constraints_by_symbols(symbols), 
-                              transition_rules=transition_rules) for symbols, poses in tracking_pools]
+                              transition_rules=transition_rules) for symbols, features in tracking_pools]
 
         print(f'Generated {len(self.ekfs)} EKFs:\n  '
                '\n  '.join(str(e) for e in self.ekfs))
@@ -143,7 +159,8 @@ class Kineverse6DEKFTracker(object):
                         jjt   = h_prime.dot(h_prime.T)
                         jjt_e = jjt.dot(obs_delta)
                         alpha_numerator = obs_delta.T.dot(jjt_e)
-                        alpha = np.abs(alpha_numerator) / np.abs(jjt_e.T.dot(jjt_e))
+                        temp_denominator = jjt_e.T.dot(jjt_e)
+                        alpha = np.abs(alpha_numerator) / np.abs(temp_denominator + (temp_denominator == 0))
                         # print(x, alpha, obs_delta.T.dot(jjt_e), jjt_e.T.dot(jjt_e), np.linalg.cond(jjt))
 
                         estimate.state += (h_prime.T.dot(obs_delta) * alpha).reshape(estimate.state.shape)
@@ -165,7 +182,7 @@ class Kineverse6DEKFTracker(object):
                     # df.to_csv(f'ekf_{x}_postinit.csv')
                 else:
                     estimate    = self.estimates[x]
-                    print(f'EKF {x} cov:\n{estimate.cov}')
+                    # print(f'EKF {x} cov:\n{estimate.cov}')
                     estimate.state, estimate.cov = ekf.predict(estimate.state.flatten(), 
                                                                estimate.cov, 
                                                                ekf.gen_control_vector(control), dt=0.05)
@@ -197,8 +214,8 @@ class ROSEKFManager(object):
             self.broadcaster = None
 
         self.pub_state        = rospy.Publisher('~state_estimate', ValueMapMsg, queue_size=1, tcp_nodelay=True)
-        self.sub_observations = rospy.Subscriber('~observations', TransformStampedArrayMsg, callback=self.cb_obs, queue_size=1)
-        self.sub_controls     = rospy.Subscriber('~controls',        ValueMapMsg, callback=self.cb_controls, queue_size=1)
+        self.sub_observations = rospy.Subscriber('~observations',  TransformStampedArrayMsg, callback=self.cb_obs, queue_size=1)
+        self.sub_controls     = rospy.Subscriber('~controls',      ValueMapMsg, callback=self.cb_controls, queue_size=1)
 
     def cb_obs(self, transform_stamped_array_msg):
         for trans in transform_stamped_array_msg.transforms:
@@ -210,8 +227,16 @@ class ROSEKFManager(object):
                                           trans.transform.rotation.z,
                                           trans.transform.rotation.w)
             self.last_observation[trans.child_frame_id] = matrix
+            # self.last_observation[trans.child_frame_id] = np_6d_pose_feature(trans.transform.translation.x, 
+            #                                                                  trans.transform.translation.y, 
+            #                                                                  trans.transform.translation.z,
+            #                                                                  trans.transform.rotation.x,
+            #                                                                  trans.transform.rotation.y,
+            #                                                                  trans.transform.rotation.z,
+            #                                                                  trans.transform.rotation.w)
 
         self.vis.begin_draw_cycle('observations')
+        # temp_poses = [gm.frame3_axis_angle(feature[3:] / np.sqrt(np.sum(feature[3:]**2)), np.sqrt(np.sum(feature[3:]**2)), feature[:3]) for feature in self.last_observation.values()]
         self.vis.draw_poses('observations', np.eye(4), 0.2, 0.01, self.last_observation.values())
         self.vis.render('observations')
         self.try_update()
@@ -243,7 +268,7 @@ class ROSEKFManager(object):
         state_msg.symbol = [str(s) for s in state_msg.symbol]
         self.pub_state.publish(state_msg)
 
-        print('Performed update of estimate and published it.')
+        # print('Performed update of estimate and published it.')
 
         # self.last_control = {}
         self.last_observation = {}
@@ -258,9 +283,19 @@ if __name__ == '__main__':
 
     km = GeometryModel()
 
-    shelf_location = gm.point3(*[gm.Position(f'l_{x}') for x in 'xyz'])
+    try:
+        location_x   = rospy.get_param('/nobilia_x')
+        location_y   = rospy.get_param('/nobilia_y')
+        location_z   = rospy.get_param('/nobilia_z')
+        location_yaw = rospy.get_param('/nobilia_yaw')
+    except KeyError as e:
+        print(f'Failed to get nobilia localization params. Original error:\n{e}')
+        exit()
 
-    origin_pose = gm.frame3_rpy(0, 0, gm.Position('l_ry'), shelf_location)
+    shelf_location = gm.point3(location_x, location_y, location_z)
+
+    # origin_pose = gm.frame3_rpy(0, 0, 0, shelf_location)
+    origin_pose = gm.frame3_rpy(0, 0, location_yaw, shelf_location)
 
     create_nobilia_shelf(km, Path('nobilia'), origin_pose)
 
@@ -269,12 +304,16 @@ if __name__ == '__main__':
 
     shelf   = km.get_data('nobilia')
     tracker = Kineverse6DEKFTracker(km, 
-                                    [Path(f'nobilia/markers/{name}') for name in shelf.markers.keys()], 
+                                    # [Path(f'nobilia/markers/{name}') for name in shelf.markers.keys()], # 
+                                    # [Path(f'nobilia/markers/body')],
+                                    [Path(f'nobilia/markers/top_panel')],
                                     #{x: x for x in gm.free_symbols(origin_pose)},
                                     noise_estimation_observations=20,
                                     estimate_init_steps=1000)
 
     node = ROSEKFManager(tracker, shelf, Path('nobilia'))
+
+
 
     reference_frame = rospy.get_param('~reference_frame', 'world')
     grab_from_tf    = rospy.get_param('~grab_from_tf', False)

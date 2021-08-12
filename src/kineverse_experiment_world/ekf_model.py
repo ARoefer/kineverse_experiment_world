@@ -5,6 +5,26 @@ import kineverse.gradients.gradient_math as gm
 
 from kineverse.utils import union
 
+def trim_singularities(matrix, threshold=0.75):
+    rejected = set()
+    correlation = np.abs(np.corrcoef(matrix))
+    for y in range(correlation.shape[0]):
+        if y in rejected:
+            continue
+
+        correlated = np.where(correlation[y, y + 1:] >= threshold)
+        if len(correlated) > 0:
+            rejected.update(correlated[0] + y + 1)
+    indices = [x for x in range(matrix.shape[0]) if x not in rejected]
+    return indices, np.take(matrix, indices, axis=0)
+
+def reorder_H(H_t, state_variance, h_t, obs_t):
+    H_t_uncertainty = H_t * state_variance
+    H_t_gain = np.abs(H_t_uncertainty.T * (h_t.flatten() - obs_t))
+    H_t_rank = np.sum(H_t_gain, axis=0)
+    indices = [i for _, i in reversed(sorted(zip(H_t_rank, range(H_t.shape[0]))))]
+    return indices, np.take(H_t, indices, axis=0)
+
 
 class Particle(object):
     def __init__(self, state, cov, probability=1.0):
@@ -15,7 +35,7 @@ class Particle(object):
 class EKFModel(object):
     DT_SYM = gm.Symbol('dt')
 
-    def __init__(self, observations, constraints, Q=None, transition_rules=None):
+    def __init__(self, observations, constraints, Q=None, transition_rules=None, trim_threshold=None):
         """Sets up an EKF estimating the underlying state of a set of observations.
         
         Args:
@@ -101,6 +121,7 @@ class EKFModel(object):
         self.state_bounds = np.array([state_constraints[s] if  s in state_constraints else
                                      [-np.pi, np.pi] for s in self.ordered_vars])
         self.R = None # np.zeros((len(self.obs_labels), len(self.obs_labels)))
+        self.trim_threshold = trim_threshold
 
     def gen_control_vector(self, control_dict):
         """Generates a control vector from a given dict mapping symbols to values
@@ -173,21 +194,29 @@ class EKFModel(object):
             raise Exception('No noise model set for EKF model.')
 
         H_t = self.h_prime_fn.call2(state_t)
-        S_t_temp = H_t.dot(Sigma_t.dot(H_t.T))
-        if np.linalg.det(S_t_temp) == 0.0:
-            # This is a hack. It does not guarantee immediate invertibility of S_t.
-            # However over multiple iterations it should become invertible
-            # I don't know what the effect on the probabilistic side of things is
-            H_t += np.random.normal(0, 0.1, H_t.shape)
-            S_t_temp = H_t.dot(Sigma_t.dot(H_t.T))
-            print('HACK')
 
-        S_t = S_t_temp + self.R
+        h_t = self.h_fn.call2(state_t)
 
+        # H_indices, H_t = reorder_H(H_t, np.diag(Sigma_t), h_t, obs_t)
+        if self.trim_threshold is not None:
+            idx_obs, H_t = trim_singularities(H_t, self.trim_threshold)
+        else:
+            idx_obs = range(H_t.shape[0])
+        # These indices actually refer to the reordered H_t, not the original one
+        # idx_obs = [H_indices[x] for x in idx_obs]
+
+        # if not hasattr(self, 'lol'):
+        #     pd.DataFrame(data=H_t).to_csv('H_t.csv')
+        #     np.savetxt('R.csv', self.R)
+        #     self.lol = True
+
+        # After reducing the observation, R will not necessarily match anymore
+        reduced_R = np.take(np.take(self.R, idx_obs, axis=0), idx_obs, axis=1)
+        S_t = H_t.dot(Sigma_t.dot(H_t.T)) + reduced_R
         # print(f'H_t: {H_t}\nS_t:\n{S_t}')
         if np.linalg.det(S_t) != 0.0:
             K_t = Sigma_t.dot(H_t.T.dot(np.linalg.inv(S_t)))
-            y_t = obs_t - self.h_fn.call2(state_t).flatten()
+            y_t = np.take(obs_t - h_t.flatten(), idx_obs).reshape((len(idx_obs), 1))
             state_t = (state_t + K_t.dot(y_t)).flatten()
             Sigma_t = (np.eye(Sigma_t.shape[0]) - K_t.dot(H_t)).dot(Sigma_t)
             return state_t, Sigma_t
