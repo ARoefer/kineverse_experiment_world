@@ -42,7 +42,8 @@ from kineverse.visualization.plotting              import draw_recorders,  \
                                                           ColorGenerator
 from kineverse.visualization.trajectory_visualizer import TrajectoryVisualizer
 
-from kineverse_experiment_world.push_demo_base     import generate_push_closing
+from kineverse_experiment_world.push_demo_base     import generate_push_closing, \
+                                                          PushingController
 from kineverse_experiment_world.nobilia_shelf      import create_nobilia_shelf
 
 from trajectory_msgs.msg import JointTrajectory as JointTrajectoryMsg
@@ -238,16 +239,8 @@ if __name__ == '__main__':
 
 
     # GOAL DEFINITION
-    eef_path = Path(f'{robot}/links/{robot_link}/pose')
-    eef_pose = km.get_data(eef_path)
-    eef_pos  = gm.pos_of(eef_pose)
-
-    print('EEF free symbols:\n  {}'.format('\n  '.join(sorted([str(s) for s in gm.free_symbols(eef_pose)]))))
-
-    cam_pose    = km.get_data('{}/links/head_camera_link/pose'.format(robot)) if robot != 'pr2' else km.get_data('pr2/links/head_mount_link/pose')
-    cam_pos     = gm.pos_of(cam_pose)
-    cam_forward = gm.x_of(cam_pose)
-    cam_to_eef  = eef_pos - cam_pos
+    eef_path = Path(f'{robot}/links/{robot_link}')
+    cam_path = Path(f'{robot}/links/head_camera_link') if robot != 'pr2' else Path('pr2/links/head_mount_link')
 
     kitchen_parts = ['iai_fridge_door_handle', #]
                      'fridge_area_lower_drawer_handle',#]
@@ -293,95 +286,62 @@ if __name__ == '__main__':
     n_iter    = []
     total_dur = []
 
-    for part in [Path(f'kitchen/links/{p}/pose') for p in kitchen_parts] + [Path(f'nobilia/links/handle/pose')]:
-        print('Planning trajectory for "{}"'.format(part))
-        kitchen_path = part
-        obj_pose = km.get_data(kitchen_path)
-
+    for part_path in [Path(f'kitchen/links/{p}') for p in kitchen_parts] + [Path(f'nobilia/links/handle')]:
+        print(f'Planning trajectory for "{part_path}"')
         printed_exprs = {}
+        obj = km.get_data(part_path)
 
-        controlled_symbols = robot_controlled_symbols.union({gm.DiffSymbol(j) for j in gm.free_symbols(obj_pose)})
+        start_state = {s: 0.4 for s in gm.free_symbols(obj.pose)}
 
-        start_state = {s: 0.4 for s in gm.free_symbols(obj_pose)}
-
-        # Generate push problem
-        constraints, geom_distance, coll_world, p_internals = generate_push_closing(km,
-                                                                                   start_state,
-                                                                                   controlled_symbols,
-                                                                                   eef_pose,
-                                                                                   obj_pose,
-                                                                                   eef_path[:-1],
-                                                                                   kitchen_path[:-1],
-                                                                                   use_geom_circulation)
-
-        start_state.update({s: 0.0 for s in gm.free_symbols(coll_world)})
-        start_state.update({s: 0.4 for s in gm.free_symbols(obj_pose)})
-        controlled_values, constraints = generate_controlled_values(constraints, controlled_symbols)
-        controlled_values = depth_weight_controlled_values(km, controlled_values, exp_factor=1.0)
-
-        # print(len(controlled_symbols))
-
+        weights = None
         if isinstance(base_joint, DiffDriveJoint):
-          controlled_values[str(base_joint.l_wheel_vel)].weight_id = 0.002
-          controlled_values[str(base_joint.r_wheel_vel)].weight_id = 0.002
-
-        # CAMERA STUFF
-        cam_to_obj = gm.pos_of(obj_pose) - cam_pos
-        look_goal  = 1 - (gm.dot_product(cam_to_obj, cam_forward) / gm.norm(cam_to_obj))
+            weights = {}
+            weights[base_joint.l_wheel_vel] = 0.002
+            weights[base_joint.r_wheel_vel] = 0.002
 
 
-        # GOAL CONSTAINT GENERATION
-        goal_constraints = {'reach_point': PIDC(geom_distance, geom_distance, 1, k_i=0.01),
-                            'look_at_obj':   SC(   -look_goal,    -look_goal, 1, look_goal),
-                            'avoid_collisions': SC.from_constraint(closest_distance_constraint_world(eef_pose, eef_path[:-1], 0.03), 100)
-                            }
-
-        # EXERT SUFICIENT FORCE
-        if False and robot in torque_limits:
-            torque_relevant_joints = gm.free_symbols(p_internals.contact_a).intersection(joint_symbols)
-            relevant_torque_limits = {j_sym: torque_limits[robot][Path(j_sym)[1]] for j_sym in torque_relevant_joints if Path(j_sym)[1] in torque_limits[robot]}
-            torque_ordered_joints, ordered_torque_limits = zip(*relevant_torque_limits.items())
-
-            torque_projection = cart_force_to_q_forces(p_internals.contact_a,
-                                                       -20 * p_internals.normal_b_to_a,
-                                                       torque_ordered_joints)
-            torque_bounds_delta = [t_limit - gm.abs(c) for c, t_limit in zip(torque_projection.elements(), ordered_torque_limits)]
-            for symbol, bound_delta in zip(torque_ordered_joints, torque_bounds_delta):
-                goal_constraints[f'{symbol} torque_bound'] = SC(-bound_delta, 1e9, 1, bound_delta)
-                printed_exprs[f'{symbol} torque_bound'] = bound_delta
-
-        # goal_constraints.update(c_avoidance_constraints)
-        goal_constraints.update({f'open_object_{x}': PIDC(s, s, 1) for x, s in enumerate(gm.free_symbols(obj_pose))})
-
-        in_contact = gm.less_than(geom_distance, 0.01)
-
-        if robot in start_poses:
-          start_state.update({gm.Position(Path(robot) + (k,)): v  for k, v in start_poses[robot].items()})
 
         if args.vis_plan == 'during':
-            qpb = GQPB(coll_world, constraints, goal_constraints, controlled_values, visualizer=visualizer)
+            pushing_controller = PushingController(km,
+                                                   eef_path,
+                                                   part_path,
+                                                   robot_controlled_symbols,
+                                                   start_state,
+                                                   cam_path,
+                                                   use_geom_circulation,
+                                                   visualizer,
+                                                   weights)
         else:
-            qpb = GQPB(coll_world, constraints, goal_constraints, controlled_values)
+            pushing_controller = PushingController(km,
+                                                   eef_path,
+                                                   part_path,
+                                                   robot_controlled_symbols,
+                                                   start_state,
+                                                   cam_path,
+                                                   use_geom_circulation,
+                                                   None,
+                                                   weights)
 
-        start_state.update({c.symbol: 0.0 for c in controlled_values.values()})
+        if robot in start_poses:
+            start_state.update({gm.Position(Path(robot) + (k,)): v for k, v in start_poses[robot].items()})
 
-        qpb._cb_draw = p_internals.f_debug_draw
-        integrator = CommandIntegrator(qpb,
+        start_state.update({c.symbol: 0.0 for c in pushing_controller.controlled_values.values()})
+        start_state.update({s: 0.4 for s in gm.free_symbols(obj.pose)})
+
+        integrator = CommandIntegrator(pushing_controller.qpb,
                                        integration_rules,
                                        start_state=start_state,
-                                       recorded_terms={'distance': geom_distance,
-                                                       'gaze_align': look_goal,
-                                                       'in contact': in_contact,
-                                                       'goal': next(iter(goal_constraints.values())).expr,
+                                       recorded_terms={'distance': pushing_controller.geom_distance,
+                                                       'gaze_align': pushing_controller.look_goal,
+                                                       'in contact': pushing_controller.in_contact,
                                                        'location_x': base_joint.x_pos,
                                                        'location_y': base_joint.y_pos,
                                                        'rotation_a': base_joint.a_pos},
                                        printed_exprs=printed_exprs)
 
-
         # RUN
         int_factor = 0.02
-        integrator.restart('{} Cartesian Goal Example'.format(robot))
+        integrator.restart(f'{robot} Cartesian Goal Example')
         # print('\n'.join('{}: {}'.format(s, r) for s, r in integrator.integration_rules.items()))
         try:
             start = Time.now()
@@ -389,7 +349,7 @@ if __name__ == '__main__':
             total_dur.append((Time.now() - start).to_sec())
             n_iter.append(integrator.current_iteration + 1)
         except Exception as e:
-            print('Exception during integration:\n{}'.format(e))
+            print(f'Exception during integration:\n{e}')
 
 
 
@@ -415,7 +375,7 @@ if __name__ == '__main__':
             # ax.get_legend().loc = 'upper right'
             # ax.get_legend().bbox_to_anchor = (1.0, 0.0)
             fig.tight_layout()
-            fig.savefig('{}/{}_sandbox_{}_plots.png'.format(plot_dir, robot, part))
+            fig.savefig(f'{plot_dir}/{robot}_sandbox_{part}_plots.png')
 
             # draw_recorders([rec_c], 0.5, 4, 2.5).savefig('{}/{}_sandbox_{}_plots.png'.format(plot_dir, robot, part))
             # draw_recorders([rec_b, rec_c] + [r for _, r in sorted(recs.items())], 1, 8, 4).savefig('{}/{}_sandbox_{}_constraints.png'.format(plot_dir, robot, part))
