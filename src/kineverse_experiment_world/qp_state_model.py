@@ -100,6 +100,7 @@ class QPStateModel(object):
         self.qp = TQPB(hard_constraints, flat_obs_constraints, cvs)
 
         self._state = {s: 0 for s in state_vars}
+        self._state_buffer = []
         self._state.update({s: 0 for s in self.transition_args})
         self._obs_state = {s: 0 for s in sum(self.obs_vars.values(), [])}
         self._obs_count = 0
@@ -151,11 +152,18 @@ class QPStateModel(object):
 
         # CMA update
         self._obs_count += 1
-        cma_n   = np.array([self._state[s] for s in self.ordered_vars])
+        # cma_n   = np.array([self._state[s] for s in self.ordered_vars])
         x_n_1   = np.array([self._obs_state[s] for s in self.ordered_vars]).flatten()
+
+        self._state_buffer.append(x_n_1)
+        if len(self._state_buffer) > 20:
+            self._state_buffer = self._state_buffer[-20:]
+
+        state_mean = np.mean(self._state_buffer, axis=0)
+
         # print(f'cma_n: {cma_n}\nx_n_1: {x_n_1}')
-        cma_n_1 = cma_n + (x_n_1 - cma_n) / self._obs_count if self._obs_count > 1 else x_n_1
-        self._state.update({s: v for s, v in zip(self.ordered_vars, cma_n_1)})
+        # cma_n_1 = cma_n + (x_n_1 - cma_n) / self._obs_count if self._obs_count > 1 else x_n_1
+        self._state.update({s: v for s, v in zip(self.ordered_vars, state_mean)})
         return self.qp.latest_error
 
     def state(self):

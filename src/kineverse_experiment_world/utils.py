@@ -1,6 +1,12 @@
 import numpy as np
 
 from kineverse.gradients.gradient_math import *
+from kineverse.model.paths                   import Path, CPath
+from kineverse.operations.basic_operations   import ExecFunction
+from kineverse.operations.special_kinematics import create_diff_drive_joint_with_symbols, \
+                                                    create_omnibase_joint_with_symbols, \
+                                                    CreateAdvancedFrameConnection
+
 
 def np_rotation3_axis_angle(axis, angle):
     """ Conversion of unit axis and angle to 4x4 rotation matrix according to:
@@ -81,3 +87,46 @@ def str2bool(v):
         return False
     else:
         raise argparse.ArgumentTypeError('Boolean value expected.')
+
+
+def insert_omni_base(km, robot_path, root_link, world_frame='world', lin_vel=1.0, ang_vel=0.6):
+    base_joint_path = robot_path + Path(f'joints/to_{world_frame}')
+    base_op = ExecFunction(base_joint_path,
+                           create_omnibase_joint_with_symbols,
+                           CPath(f'{world_frame}/pose'),
+                           CPath(robot_path + Path(f'links/{root_link}/pose')),
+                           gm.vector3(0,0,1),
+                           1.0, 0.6, CPath(robot_path))
+    km.apply_operation_after(f'create {base_joint_path}',
+                             f'create {robot_path}/links/{root_link}', base_op)
+    km.apply_operation_after(f'connect {world_frame} {robot_path}/links/{root_link}',
+                             f'create {base_joint_path}',
+                             CreateAdvancedFrameConnection(base_joint_path,
+                                                           Path(world_frame),
+                                                           robot_path + Path(f'links/{root_link}')))
+    km.clean_structure()
+
+
+def insert_diff_base(km,
+                     robot_path,
+                     root_link,
+                     world_frame='world',
+                     wheel_radius=0.06,
+                     wheel_distance=0.4,
+                     wheel_vel_limit=0.6):
+    base_joint_path = robot_path + Path(f'joints/to_{world_frame}')
+    base_op = ExecFunction(base_joint_path,
+                           create_diff_drive_joint_with_symbols,
+                           CPath(f'{world_frame}/pose'),
+                           CPath(robot_path + CPath(f'links/{root_link}/pose')),
+                           wheel_radius,
+                           wheel_distance,
+                           wheel_vel_limit, CPath(robot_path))
+    km.apply_operation_after(f'create {base_joint_path}',
+                             f'create {robot_path}/links/{root_link}', base_op)
+    km.apply_operation_after(f'connect {world_frame} {robot_path}/links/{root_link}',
+                             f'create {base_joint_path}',
+                             CreateAdvancedFrameConnection(base_joint_path,
+                                                           Path(world_frame),
+                                                           robot_path + Path(f'links/{root_link}')))
+    km.clean_structure()

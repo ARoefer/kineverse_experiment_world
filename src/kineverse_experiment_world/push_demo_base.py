@@ -70,7 +70,8 @@ class PushingController(object):
         actuated_object = km.get_data(actuated_object_path)
         target_object   = km.get_data(target_object_path)
 
-        all_controlled_symbols = controlled_symbols.union({gm.DiffSymbol(j) for j in gm.free_symbols(target_object.pose)})
+        all_controlled_symbols = controlled_symbols.union({gm.DiffSymbol(j) for j in gm.free_symbols(target_object.pose)
+                                                                            if 'location' not in str(j)})
 
         # Generate push problem
         constraints, \
@@ -129,5 +130,5 @@ class PushingController(object):
     def get_qp(self):
         return self.qpb
 
-    def get_command(self, state):
-        return self.qpb.get_cmd(state)
+    def get_cmd(self, state, deltaT):
+        return self.qpb.get_cmd(state, deltaT=deltaT)
