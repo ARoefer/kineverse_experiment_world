@@ -1,0 +1,6 @@
+<launch>
+    <node pkg="kineverse_experiment_world" type="noisy_6d_obs_generator.py" name="nobilia_noisy_obs" output="screen">
+        <param name="noise_lin_sd"  value="0.01"/>
+        <param name="poses" type="yaml" value="[nobilia/markers/body, nobilia/markers/top_panel, nobilia/markers/bottom_panel]"/>
+    </node>
+</launch>
