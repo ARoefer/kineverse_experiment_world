@@ -11,6 +11,7 @@ from kineverse_msgs.msg             import ValueMap as ValueMapMsg
 from kineverse.model.geometry_model import GeometryModel, Path, Frame
 from kineverse.ros.tf_publisher     import ModelTFBroadcaster_URDF
 from kineverse.visualization.ros_visualizer import ROSVisualizer
+from kineverse.utils import union
 
 from kineverse_experiment_world.qp_state_model import QPStateModel, QPSolverException
 from kineverse_experiment_world.nobilia_shelf  import create_nobilia_shelf
@@ -96,6 +97,9 @@ class Kineverse6DQPTracker(object):
 
         self.observation_names = [str(p) for p in paths_observables]
 
+    def get_controls(self):
+        return union([e.command_vars for e in self.estimators])
+
     def process_control(self, controls):
         for estimator in self.estimators:
             estimator.set_command(controls)
@@ -119,10 +123,12 @@ class Kineverse6DQPTracker(object):
 class ROSQPEManager(object):
     def __init__(self, tracker : Kineverse6DQPTracker, 
                        model=None, model_path=None, reference_frame='world', urdf_param='/qp_description_check', update_freq=30):
-        self.tracker = tracker 
+        self.tracker          = tracker 
         self.last_observation = {}
         self.last_update      = None
         self.reference_frame  = reference_frame
+
+        self.str_controls = {str(s) for s in self.tracker.get_controls()}
 
         self.vis = ROSVisualizer('~vis', reference_frame)
 
