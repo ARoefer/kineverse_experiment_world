@@ -1,0 +1,5 @@
+<launch>
+	<node pkg="kineverse_experiment_world" type="urdf_kinematic_sim.py" name="pr2_sim" output="screen">
+		<param name="description" value="package://iai_pr2_description/robots/pr2_calibrated_with_ft2.xml"/>
+	</node>
+</launch>

@@ -1,0 +1,12 @@
+<launch>
+    <include file="$(find kineverse_experiment_world)/launch/pr2_sim.launch"/>
+
+    <include file="$(find kineverse_experiment_world)/launch/nobilia_sim_obs.launch">
+        <arg name="transform" value="[1.0, -0.2, 0.9, 0, 0, 0]"/>
+    </include>
+
+    <node name="nobilia_estimator" pkg="kineverse_experiment_world" type="kineverse_qp_ar_tracker.py">
+        <remap from="~observations" to="/nobilia_noisy_obs/observations"/>
+        <remap from="~controls" to="/nobilia_kinematic_sim/command"/>
+    </node>
+</launch>
