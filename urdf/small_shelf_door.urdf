@@ -1,0 +1,95 @@
+<robot name="small_shelf_door">
+  <link name="body">
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0.1885"/>
+      <geometry>
+        <box size="0.392 0.413 0.036"/>
+      </geometry>
+    </visual>
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 -0.1885"/>
+      <geometry>
+        <box size="0.392 0.413 0.036"/>
+      </geometry>
+    </visual>
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0.1875 0"/>
+      <geometry>
+        <box size="0.392 0.038 0.347"/>
+      </geometry>
+    </visual>
+    <visual>
+      <origin rpy="0 0 0" xyz="0 -0.1875 0"/>
+      <geometry>
+        <box size="0.392 0.038 0.347"/>
+      </geometry>
+    </visual>
+    <visual>
+      <origin rpy="0 0 0" xyz="-0.178 0 0"/>
+      <geometry>
+        <box size="0.036 0.347 0.341"/>
+      </geometry>
+    </visual>
+  </link>
+  
+  <link name="door">
+    <origin rpy="0 0 0" xyz="-0.01 -0.1585 0"/>
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <box size="0.015 0.337 0.341"/>
+      </geometry>
+    </visual>
+  </link>
+
+  <joint name="door_joint" type="revolute">
+    <origin rpy="0 0 0" xyz="0.195 0.1585 0" />
+    <parent link="body" />
+    <child link="door" />
+    <axis xyz="0 0 1" />
+    <limit effort="60" lower="0.0" upper="1.57" velocity="0.05" />
+  </joint>
+
+  <link name="handle">
+    <visual>
+      <origin rpy="0 0 0" xyz="0.05 0 0"/>
+      <geometry>
+        <cylinder radius="0.005" length="0.14"/>
+      </geometry>
+    </visual>
+    <visual>
+      <origin rpy="0 1.57 0" xyz="0.025 0 0.07"/>
+      <geometry>
+        <cylinder radius="0.005" length="0.05"/>
+      </geometry>
+    </visual>
+    <visual>
+      <origin rpy="0 1.57 0" xyz="0.025 0 -0.07"/>
+      <geometry>
+        <cylinder radius="0.005" length="0.05"/>
+      </geometry>
+    </visual>
+  </link>
+  
+  <joint name="handle_joint" type="fixed">
+    <origin rpy="0 0 0" xyz="0.0075 -0.1385 0" />
+    <parent link="door" />
+    <child link="handle" />
+  </joint>
+
+  <link name="marker_body"/>
+
+  <joint name="marker_body_joint" type="fixed">
+    <origin rpy="0 0 1.57" xyz="0 0 0.2065"/>
+    <parent link="body"/>
+    <child  link="marker_body"/>
+  </joint>
+
+  <link name="marker_door"/>
+
+  <joint name="marker_door_joint" type="fixed">
+    <origin rpy="0 0 0" xyz="0.0075 0 0"/>
+    <parent link="door"/>
+    <child  link="marker_door"/>
+  </joint>  
+</robot>

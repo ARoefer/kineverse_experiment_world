@@ -1,0 +1,7 @@
+<launch>
+    <include file="$(find another_aruco)/launch/pr2_kinect2.launch">
+        <arg name="marker_size" value="0.09"/>
+        <arg name="marker_dict" value="DICT_4X4_50"/>
+        <arg name="aliases" value="{obs_shelf_body: 0, obs_shelf_top_panel: 1, obs_shelf_bottom_panel: 2}"/>
+    </include>
+</launch>

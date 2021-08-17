@@ -1,5 +1,0 @@
-<launch>
-	<include file="$(find kineverse_experiment_world)/launch/pr2_shelf_estimation.launch"/>
-
-	<include file="$(find kineverse_experiment_world)/launch/pr2_vel_control.launch"/>
-</launch>

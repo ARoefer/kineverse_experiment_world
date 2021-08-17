@@ -4,7 +4,8 @@
     <node name="nobilia_estimator" pkg="kineverse_experiment_world" type="kineverse_qp_ar_tracker.py" output="screen">
         <remap from="~observations" to="/aruco_publisher/observations"/>
         <!-- <remap from="~controls" to="/nobilia_kinematic_sim/command"/> -->
-        <param name="~aliases" type="yaml" value="{nobilia/markers/body: obs_shelf_body, nobilia/markers/top_panel: obs_shelf_top_panel, nobilia/markers/bottom_panel: obs_shelf_bottom_panel}"/>
+        <param name="~model" value="package://kineverse_experiment_world/urdf/small_shelf_door.urdf"/>
+        <param name="~observations" type="yaml" value="{small_shelf_door/links/maker_body: obs_shelf_body, small_shelf_door/links/top_panel: obs_shelf_door}"/>
         <param name="~reference_frame" value="base_footprint"/>
     </node>
 </launch>

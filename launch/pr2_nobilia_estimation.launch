@@ -1,0 +1,11 @@
+<launch>
+	<include file="$(find kineverse_experiment_world)/launch/pr2_aruco_nobilia_tracking.launch"/>
+
+    <node name="nobilia_estimator" pkg="kineverse_experiment_world" type="kineverse_qp_ar_tracker.py" output="screen">
+        <remap from="~observations" to="/aruco_publisher/observations"/>
+        <!-- <remap from="~controls" to="/nobilia_kinematic_sim/command"/> -->
+        <param name="~model" value="nobilia"/>
+        <param name="~observations" type="yaml" value="{nobilia/markers/body: obs_shelf_body, nobilia/markers/top_panel: obs_shelf_top_panel, nobilia/markers/bottom_panel: obs_shelf_bottom_panel}"/>
+        <param name="~reference_frame" value="base_footprint"/>
+    </node>
+</launch>

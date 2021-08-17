@@ -12,6 +12,7 @@ from kineverse.model.geometry_model import GeometryModel, Path, Frame
 from kineverse.ros.tf_publisher     import ModelTFBroadcaster_URDF
 from kineverse.visualization.ros_visualizer import ROSVisualizer
 from kineverse.utils import union
+from kineverse.urdf_fix import load_urdf_file
 
 from kineverse_experiment_world.qp_state_model import QPStateModel, QPSolverException
 from kineverse_experiment_world.nobilia_shelf  import create_nobilia_shelf
@@ -235,43 +236,53 @@ class ROSQPEManager(object):
 if __name__ == '__main__':
     rospy.init_node('kineverse_ar_tracker')
 
+    if not rospy.has_param('~model'):
+        print('Missing required parameter ~model. Set it to a urdf path or "nobilia"')
+        exit(1)
+
     reference_frame = rospy.get_param('~reference_frame', 'world')
-    aliases         = rospy.get_param('~aliases', None)
+    model_path      = rospy.get_param('~model')
+    observations    = rospy.get_param('~observations', None)
+
+    if type(observations) is not dict:
+        print('Required parameter ~observations needs to be a dict mapping tracked model paths to observation names')
+        exit(1)
 
     km = GeometryModel()
 
-    # try:
-    #     location_x   = rospy.get_param('/nobilia_x')
-    #     location_y   = rospy.get_param('/nobilia_y')
-    #     location_z   = rospy.get_param('/nobilia_z')
-    #     location_yaw = rospy.get_param('/nobilia_yaw')
-    # except KeyError as e:
-    #     print(f'Failed to get nobilia localization params. Original error:\n{e}')
-    #     exit()
+    if model_path != 'nobilia':
+        urdf_model = load_urdf_file(model_path)
+        model_name = urdf_model.name
 
-    shelf_location = gm.point3(*[gm.Position(f'nobilia_location_{x}') for x in 'xyz'])
+        obj_location = gm.point3(*[gm.Position(f'{urdf_model.name}_location_{x}') for x in 'xyz'])
+        obj_yaw      = gm.Position(f'{urdf_model.name}_location_yaw')
+        origin_pose  = gm.frame3_rpy(0, 0, obj_yaw, obj_location)
 
-    shelf_yaw = gm.Position('nobilia_location_yaw')
-    # origin_pose = gm.frame3_rpy(0, 0, 0, shelf_location)
-    origin_pose = gm.frame3_rpy(0, 0, shelf_yaw, shelf_location)
+        load_urdf(km,
+                  Path(model_name),
+                  urdf_model,
+                  reference_frame,
+                  root_transform=origin_pose)
+    else:
+        shelf_location = gm.point3(*[gm.Position(f'nobilia_location_{x}') for x in 'xyz'])
 
-    create_nobilia_shelf(km, Path('nobilia'), origin_pose, parent_path=Path(reference_frame))
+        shelf_yaw = gm.Position('nobilia_location_yaw')
+        # origin_pose = gm.frame3_rpy(0, 0, 0, shelf_location)
+        origin_pose = gm.frame3_rpy(0, 0, shelf_yaw, shelf_location)
+        create_nobilia_shelf(km, Path('nobilia'), origin_pose, parent_path=Path(reference_frame))
+        model_name = 'nobilia'
 
     km.clean_structure()
     km.dispatch_events()
 
-    shelf   = km.get_data('nobilia')
-    tracker = Kineverse6DQPTracker(km, 
-                                    #[Path(f'nobilia/markers/{name}') for name in shelf.markers.keys()], # 
-                                    [Path(f'nobilia/markers/body'), Path(f'nobilia/markers/top_panel')],
-                                    #{x: x for x in gm.free_symbols(origin_pose)},
-                                   )
+    model   = km.get_data(model_name)
+    tracker = Kineverse6DQPTracker(km, observations.keys())
 
-    node = ROSQPEManager(tracker, shelf, Path('nobilia'), reference_frame, observation_alias=aliases)
-
-    # reference_frame = rospy.get_param('~reference_frame', 'world')
-    # grab_from_tf    = rospy.get_param('~grab_from_tf', False)
-    # grab_rate       = rospy.get_param('~grab_rate', 20.0)
+    node = ROSQPEManager(tracker,
+                         model,
+                         Path(model_name),
+                         reference_frame,
+                         observation_alias=aliases)
 
     while not rospy.is_shutdown():
         rospy.sleep(0.1)
