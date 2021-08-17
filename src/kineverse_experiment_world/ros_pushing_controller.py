@@ -61,7 +61,7 @@ class ROSPushingBehavior(object):
                        eef_path, ext_paths, 
                        controlled_symbols, control_alias, cam_path=None,
                        weights=None, resting_pose=None,
-                       navigation_method='cross', visualizer=None):
+                       navigation_method='linear', visualizer=None):
         self.km = km
         self.robot_prefix = robot_prefix
         self.eef_path = eef_path
@@ -128,7 +128,7 @@ class ROSPushingBehavior(object):
         if self._current_target is None:
             with self._state_lock:
                 for s, p in self._target_map.items():
-                    if self._state[s] > 2e-2: # Some thing in the scene is open
+                    if s in self._state and self._state[s] > 2e-2: # Some thing in the scene is open
                         self._current_target = p
                         self.controller = PushingController(self.km,
                                                             self.eef_path,

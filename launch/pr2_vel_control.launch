@@ -1,0 +1,5 @@
+<launch>
+	<node name="pr2_vel_controller" 
+	  pkg="kineverse_experiment_world" 
+	  type="pr2_whole_body_vel_controller.py"/>
+</launch>

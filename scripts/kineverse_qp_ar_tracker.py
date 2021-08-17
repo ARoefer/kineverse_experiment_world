@@ -122,11 +122,18 @@ class Kineverse6DQPTracker(object):
 
 class ROSQPEManager(object):
     def __init__(self, tracker : Kineverse6DQPTracker, 
-                       model=None, model_path=None, reference_frame='world', urdf_param='/qp_description_check', update_freq=30):
+                       model=None, model_path=None, 
+                       reference_frame='world', urdf_param='/qp_description_check', update_freq=30,
+                       observation_alias=None):
         self.tracker          = tracker 
         self.last_observation = {}
         self.last_update      = None
         self.reference_frame  = reference_frame
+        self.observation_aliases = {o: o for o in tracker.observation_names}
+        if observation_alias is not None:
+            for path, alias in observation_alias.items():
+                if path in self.observation_aliases:
+                    self.observation_aliases[alias] = path
 
         self.str_controls = {str(s) for s in self.tracker.get_controls()}
 
@@ -150,29 +157,38 @@ class ROSQPEManager(object):
         ref_frames = {}
         
         for trans in transform_stamped_array_msg.transforms:
+            if trans.child_frame_id not in self.observation_aliases:
+                continue
+
+            matrix = np_frame3_quaternion(trans.transform.translation.x, 
+                                          trans.transform.translation.y, 
+                                          trans.transform.translation.z,
+                                          trans.transform.rotation.x,
+                                          trans.transform.rotation.y,
+                                          trans.transform.rotation.z,
+                                          trans.transform.rotation.w)
+
             if trans.header.frame_id != self.reference_frame:
                 if trans.header.frame_id not in ref_frames:
                     try:
                         ref_trans = self.tf_buffer.lookup_transform(self.reference_frame, trans.header.frame_id, rospy.Time(0))
-                        ref_frames[trans.header.frame_id] = ref_trans
+                        np_ref_trans = np_frame3_quaternion(ref_trans.transform.translation.x, 
+                                                            ref_trans.transform.translation.y, 
+                                                            ref_trans.transform.translation.z,
+                                                            ref_trans.transform.rotation.x,
+                                                            ref_trans.transform.rotation.y,
+                                                            ref_trans.transform.rotation.z,
+                                                            ref_trans.transform.rotation.w)
+                        ref_frames[trans.header.frame_id] = np_ref_trans
                     except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
                         print(f'Exception raised while looking up {trans.header.frame_id} -> {self.reference_frame}:\n{e}')
-                        continue
+                        break
                 else:
-                    ref_trans = tf2_kdl.transform_to_kdl(ref_frames[trans.header.frame_id])
+                    np_ref_trans = ref_frames[trans.header.frame_id]
 
-                kdl_trans = tf2_kdl.transform_to_kdl(trans)
-                kdl_trans = ref_trans * kdl_trans
-                dir(kdl_trans)
-            else:
-                matrix = np_frame3_quaternion(trans.transform.translation.x, 
-                                              trans.transform.translation.y, 
-                                              trans.transform.translation.z,
-                                              trans.transform.rotation.x,
-                                              trans.transform.rotation.y,
-                                              trans.transform.rotation.z,
-                                              trans.transform.rotation.w)
-                self.last_observation[trans.child_frame_id] = matrix
+                matrix = np_ref_trans.dot(matrix)
+            
+            self.last_observation[self.observation_aliases[trans.child_frame_id]] = matrix
                 # self.last_observation[trans.child_frame_id] = np_6d_pose_feature(trans.transform.translation.x, 
                 #                                                                  trans.transform.translation.y, 
                 #                                                                  trans.transform.translation.z,
@@ -180,11 +196,12 @@ class ROSQPEManager(object):
                 #                                                                  trans.transform.rotation.y,
                 #                                                                  trans.transform.rotation.z,
                 #                                                                  trans.transform.rotation.w)
-        try:
-            self.tracker.process_observation(self.last_observation)
-        except QPSolverException as e:
-            print(f'Solver crashed during observation update. Skipping observation...')
-            return
+        else:
+            try:
+                self.tracker.process_observation(self.last_observation)
+            except QPSolverException as e:
+                print(f'Solver crashed during observation update. Skipping observation...')
+                return
         self.vis.begin_draw_cycle('observations')
         # temp_poses = [gm.frame3_axis_angle(feature[3:] / np.sqrt(np.sum(feature[3:]**2)), np.sqrt(np.sum(feature[3:]**2)), feature[:3]) for feature in self.last_observation.values()]
         self.vis.draw_poses('observations', np.eye(4), 0.2, 0.01, self.last_observation.values())
@@ -218,6 +235,9 @@ class ROSQPEManager(object):
 if __name__ == '__main__':
     rospy.init_node('kineverse_ar_tracker')
 
+    reference_frame = rospy.get_param('~reference_frame', 'world')
+    aliases         = rospy.get_param('~aliases', None)
+
     km = GeometryModel()
 
     # try:
@@ -235,20 +255,19 @@ if __name__ == '__main__':
     # origin_pose = gm.frame3_rpy(0, 0, 0, shelf_location)
     origin_pose = gm.frame3_rpy(0, 0, shelf_yaw, shelf_location)
 
-    create_nobilia_shelf(km, Path('nobilia'), origin_pose)
+    create_nobilia_shelf(km, Path('nobilia'), origin_pose, parent_path=Path(reference_frame))
 
     km.clean_structure()
     km.dispatch_events()
 
     shelf   = km.get_data('nobilia')
     tracker = Kineverse6DQPTracker(km, 
-                                    [Path(f'nobilia/markers/{name}') for name in shelf.markers.keys()], # 
-                                    # [Path(f'nobilia/markers/body')],
-                                    # [Path(f'nobilia/markers/top_panel')],
+                                    #[Path(f'nobilia/markers/{name}') for name in shelf.markers.keys()], # 
+                                    [Path(f'nobilia/markers/body'), Path(f'nobilia/markers/top_panel')],
                                     #{x: x for x in gm.free_symbols(origin_pose)},
                                    )
 
-    node = ROSQPEManager(tracker, shelf, Path('nobilia'), 'world')
+    node = ROSQPEManager(tracker, shelf, Path('nobilia'), reference_frame, observation_alias=aliases)
 
     # reference_frame = rospy.get_param('~reference_frame', 'world')
     # grab_from_tf    = rospy.get_param('~grab_from_tf', False)

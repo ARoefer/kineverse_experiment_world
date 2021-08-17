@@ -77,14 +77,16 @@ start_poses = {
               'shoulder_lift_joint': 1.4,
               'torso_lift_joint'   : 0.2},
   'pr2' : {'l_elbow_flex_joint' : -2.1213,
-              'l_shoulder_lift_joint': 1.2963,
-              'l_wrist_flex_joint' : -1.05,
-              # 'r_shoulder_pan_joint': -1.2963,
-              'r_shoulder_lift_joint': 1.2963,
-              # 'r_upper_arm_roll_joint': -1.2,
-              'r_elbow_flex_joint' : -2.1213,
-              'r_wrist_flex_joint' : -1.05,
-              'torso_lift_joint'   : 0.16825},
+           'l_shoulder_lift_joint': 1.2963,
+           'l_wrist_flex_joint' : -1.16,
+           'r_shoulder_pan_joint': -1.2963,
+           'r_shoulder_lift_joint': 1.2963,
+           'r_upper_arm_roll_joint': -1.2,
+           'r_elbow_flex_joint' : -2.1213,
+           'r_wrist_flex_joint' : -1.05,
+           'r_forearm_roll_joint': 3.14,
+           'r_wrist_roll_joint': 0,
+           'torso_lift_joint'   : 0.16825},
   'iai_boxy': {'neck_shoulder_pan_joint': -1.57,
                'neck_shoulder_lift_joint': -1.88,
                'neck_elbow_joint': -2.0,
@@ -197,7 +199,8 @@ if __name__ == '__main__':
     km = GeometryModel()
     load_urdf(km, Path(robot), urdf_model)
     load_urdf(km, Path('kitchen'), kitchen_model)
-    create_nobilia_shelf(km, Path('nobilia'), gm.translation3(1.2, 0, 0.8))
+    create_nobilia_shelf(km, Path('nobilia'), gm.frame3_rpy(0, 0, 1.2, 
+                                                            gm.point3(1.2, 0, 0.8)))
 
     km.clean_structure()
     km.apply_operation_before('create world', 'create {}'.format(robot), ExecFunction(Path('world'), Frame, ''))
@@ -205,7 +208,7 @@ if __name__ == '__main__':
     base_joint_path = Path(f'{robot}/joints/to_world')
 
     # Insert base to world kinematic
-    if robot == 'pr2' or use_omni:
+    if use_omni:
         base_op = ExecFunction(base_joint_path,
                                create_omnibase_joint_with_symbols,
                                     CPath('world/pose'),
@@ -286,12 +289,12 @@ if __name__ == '__main__':
     n_iter    = []
     total_dur = []
 
-    for part_path in [Path(f'kitchen/links/{p}') for p in kitchen_parts] + [Path(f'nobilia/links/handle')]:
+    for part_path in [Path(f'nobilia/links/panel_bottom')]: #[Path(f'kitchen/links/{p}') for p in kitchen_parts]:
         print(f'Planning trajectory for "{part_path}"')
         printed_exprs = {}
         obj = km.get_data(part_path)
 
-        start_state = {s: 0.4 for s in gm.free_symbols(obj.pose)}
+        start_state = {s: 0.7 for s in gm.free_symbols(obj.pose)}
 
         weights = None
         if isinstance(base_joint, DiffDriveJoint):
@@ -327,6 +330,8 @@ if __name__ == '__main__':
 
         start_state.update({c.symbol: 0.0 for c in pushing_controller.controlled_values.values()})
         start_state.update({s: 0.4 for s in gm.free_symbols(obj.pose)})
+
+        printed_exprs['relative_vel'] = gm.norm(pushing_controller.p_internals.relative_pos)
 
         integrator = CommandIntegrator(pushing_controller.qpb,
                                        integration_rules,

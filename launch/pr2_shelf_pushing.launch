@@ -1,0 +1,10 @@
+<launch>
+	<include file="$(find kineverse_experiment_world)/launch/pr2_shelf_base.launch"/>
+
+	<node name="pr2_pushing" pkg="kineverse_experiment_world" type="pr2_pushing.py" output="screen">
+		<remap from="~robot_command" to="/pr2_vel_controller/command"/>
+		<remap from="~external_command" to="/nobilia_estimator/controls"/>
+		<remap from="~external_js" to="/nobilia_estimator/state_estimate"/>
+		<remap from="/joint_states" to="/joint_states"/>
+	</node>
+</launch>

@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import rospy
 
 import kineverse.gradients.gradient_math as gm
@@ -59,7 +60,7 @@ if __name__ == '__main__':
 
     joint_symbols = [j.position for j in km.get_data(f'pr2/joints').values() 
                                 if hasattr(j, 'position') and gm.is_symbol(j.position)]
-    robot_controlled_symbols = {gm.DiffSymbol(j) for j in joint_symbols}
+    robot_controlled_symbols = {gm.DiffSymbol(j) for j in joint_symbols if 'torso' not in str(j)}
     if use_base:
         base_joint = km.get_data(base_joint_path)
         robot_controlled_symbols |= {gm.get_diff(x) for x in [base_joint.x_pos, base_joint.y_pos, base_joint.a_pos]}
@@ -69,24 +70,27 @@ if __name__ == '__main__':
 
     resting_pose = {'l_elbow_flex_joint' : -2.1213,
                     'l_shoulder_lift_joint': 1.2963,
-                    'l_wrist_flex_joint' : -1.05,
-                    # 'r_shoulder_pan_joint': -1.2963,
-                    'r_shoulder_lift_joint': 1.2963,
-                    # 'r_upper_arm_roll_joint': -1.2,
+                    'l_wrist_flex_joint' : -1.16,
+                    'r_shoulder_pan_joint': -1.0,
+                    'r_shoulder_lift_joint': 0.9,
+                    'r_upper_arm_roll_joint': -1.2,
                     'r_elbow_flex_joint' : -2.1213,
                     'r_wrist_flex_joint' : -1.05,
+                    'r_forearm_roll_joint': 3.14,
+                    'r_wrist_roll_joint': 0,
                     'torso_lift_joint'   : 0.16825}
     resting_pose = {gm.Position(Path(f'pr2/{n}')): v for n, v in resting_pose.items()}
 
     behavior = ROSPushingBehavior(km,
                                   Path('pr2'),
                                   eef_path,
-                                  [Path('nobilia/links/handle')],
+                                  [Path('nobilia/links/panel_bottom')],
                                   robot_controlled_symbols,
                                   {s: str(Path(gm.erase_type(s))[-1]) for s in robot_controlled_symbols},
                                   cam_path,
                                   resting_pose=resting_pose,
-                                  visualizer=visualizer)
+                                  visualizer=visualizer,
+                                  navigation_method='proj')
 
     while not rospy.is_shutdown():
         rospy.sleep(0.3)

@@ -114,8 +114,11 @@ class QPStateModel(object):
             dt = (now - self._stamp_last_integration).to_sec()
             self._state[QPStateModel.DT_SYM] = dt
             new_state = self.transition_fn.call2([self._state[x] for x in self.transition_args]).flatten()
-            for s, v in zip(self.ordered_vars, new_state):
+            for x, (s, v) in enumerate(zip(self.ordered_vars, new_state)):
+                delta = v - self._state[s]
                 self._state[s] = v
+                for state in self._state_buffer:
+                    state[x] += delta 
 
         self._stamp_last_integration = now        
 
@@ -156,8 +159,8 @@ class QPStateModel(object):
         x_n_1   = np.array([self._obs_state[s] for s in self.ordered_vars]).flatten()
 
         self._state_buffer.append(x_n_1)
-        if len(self._state_buffer) > 20:
-            self._state_buffer = self._state_buffer[-20:]
+        if len(self._state_buffer) > 7:
+            self._state_buffer = self._state_buffer[-7:]
 
         state_mean = np.mean(self._state_buffer, axis=0)
 

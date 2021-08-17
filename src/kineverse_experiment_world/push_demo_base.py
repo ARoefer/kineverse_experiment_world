@@ -6,11 +6,12 @@ from kineverse.model.geometry_model    import contact_geometry, \
                                               generate_contact_model
 from kineverse.motion.min_qp_builder   import PID_Constraint as PIDC, \
                                               SoftConstraint as SC,   \
+                                              Constraint,             \
                                               generate_controlled_values, \
                                               depth_weight_controlled_values, \
                                               GeomQPBuilder as GQPB
 
-PushingInternals = namedtuple('PushingInternals', ['contact_a', 'normal_b_to_a', 'f_debug_draw'])
+PushingInternals = namedtuple('PushingInternals', ['contact_a', 'normal_b_to_a', 'relative_pos', 'relative_vel', 'f_debug_draw'])
 
 
 def sign(x):
@@ -33,6 +34,7 @@ def generate_push_closing(km, grounding_state, controlled_symbols,
     neutral_tangent = gm.cross(contact_grad, contact_normal)
     active_tangent  = gm.cross(neutral_tangent, contact_normal)
 
+    target_pos = None
     if nav_method == 'linear':
         geom_distance = gm.norm(object_cp + active_tangent * geom_distance - robot_cp)
     elif nav_method == 'cubic':
@@ -40,10 +42,25 @@ def generate_push_closing(km, grounding_state, controlled_symbols,
         geom_distance = gm.norm(object_cp + active_tangent * dist_scaling - robot_cp)
     elif nav_method == 'cross':
         geom_distance = gm.norm(object_cp + active_tangent * gm.norm(neutral_tangent) - robot_cp)
+    elif nav_method == 'none' or nav_method is None:
+        pass
+    elif nav_method == 'proj':
+        obj_cp_dist = gm.dot_product(contact_normal, object_cp - gm.pos_of(obj_pose))
+        target_pos  = gm.pos_of(obj_pose) + contact_normal * obj_cp_dist - contact_normal * 0.02 # Drive into the surface
+        geom_distance = gm.norm(robot_cp - target_pos)
+
+    contact_relative_pos = gm.dot(gm.rot_of(obj_pose), robot_cp - gm.pos_of(obj_pose))
+    contact_relative_vel = gm.vector3(sum([gm.diff(contact_relative_pos[0], s) for s in controlled_symbols], 0),
+                                      sum([gm.diff(contact_relative_pos[1], s) for s in controlled_symbols], 0),
+                                      sum([gm.diff(contact_relative_pos[2], s) for s in controlled_symbols], 0))
 
     # PUSH CONSTRAINT GENERATION
     constraints = km.get_constraints_by_symbols(gm.free_symbols(geom_distance).union(controlled_symbols))
-    constraints.update(generate_contact_model(robot_cp, controlled_symbols, object_cp, contact_normal, gm.free_symbols(obj_pose)))
+    contact_constraints, in_contact = generate_contact_model(robot_cp, controlled_symbols, object_cp, contact_normal, gm.free_symbols(obj_pose))
+    constraints.update(contact_constraints)
+    # for x, n in enumerate('xyz'):
+    #     constraints[f'zero tangent vel_{n}'] = Constraint((1 -  in_contact) * -1e3, 
+    #                                                       (1 -  in_contact) *  1e3, contact_relative_pos[x] * (1.0 + 0.1 * x))
 
     def debug_draw(vis, state, cmd):
         vis.begin_draw_cycle('debug_vecs')
@@ -51,10 +68,18 @@ def generate_push_closing(km, grounding_state, controlled_symbols,
         s_neutral_tangent = gm.subs(neutral_tangent, state)
         vis.draw_vector('debug_vecs', s_object_cp, gm.subs(contact_grad, state), r=0, b=0)
         vis.draw_vector('debug_vecs', s_object_cp, gm.subs(active_tangent, state), r=0, b=1)
+        vis.draw_vector('debug_vecs', s_object_cp, gm.subs(neutral_tangent, state), r=1, g=1, b=0)
+        if target_pos is not None:
+            vis.draw_sphere('debug_vecs', gm.subs(target_pos, state), 0.01, r=0, b=1)
+        print(f'{gm.norm(gm.subs(contact_normal, state))}')
         # vis.draw_vector('debug_vecs', s_object_cp, s_ortho_vel_vec, r=1, b=0)
         vis.render('debug_vecs')
 
-    return constraints, geom_distance, coll_world, PushingInternals(robot_cp, contact_normal, debug_draw)
+    return constraints, geom_distance, coll_world, PushingInternals(robot_cp,
+                                                                    contact_normal,
+                                                                    contact_relative_pos,
+                                                                    contact_relative_vel,
+                                                                    debug_draw)
 
 
 class PushingController(object):
@@ -97,7 +122,7 @@ class PushingController(object):
                                                            controlled_values, 
                                                            exp_factor=1.1)
 
-        goal_constraints = {'reach_point': PIDC(geom_distance, geom_distance, 1, k_i=0.01)}
+        goal_constraints = {'reach_point': PIDC(geom_distance, geom_distance, 1, k_i=0.00)}
 
         # CAMERA STUFF
         if camera_path is not None:
