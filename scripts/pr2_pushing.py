@@ -25,6 +25,17 @@ if __name__ == '__main__':
 
     use_base = rospy.get_param('~use_base', False)
 
+    if not rospy.has_param('~model'):
+        print('Parameter ~model needs to be set to either a urdf path, or "nobilia"')
+        exit(1)
+
+    if not rospy.has_param('~links'):
+        print('Parameter ~links needs to be set to a list of paths in the model that shall be operated')
+        exit(1)
+
+    model_path = rospy.get_param('~model')
+    body_paths = rospy.get_param('~links')
+
     if not rospy.has_param('/robot_description'):
         print('PR2 will be loaded from parameter server. It is currently not there.')
         exit(1)
@@ -42,16 +53,13 @@ if __name__ == '__main__':
 
     if use_base:
         insert_omni_base(km, Path('pr2'), urdf_model.get_root(), 'world')
-        visualizer = ROSBPBVisualizer('~vis', base_frame='world')
+        reference_frame = 'world'
     else:
-        visualizer = ROSBPBVisualizer('~vis', base_frame=urdf_model.get_root())
+        reference_frame = urdf_model.get_root()
 
+    visualizer = ROSBPBVisualizer('~vis', base_frame=reference_frame)
 
-    shelf_location = gm.point3(*[gm.Position(f'nobilia_location_{x}') for x in 'xyz'])
-    shelf_yaw = gm.Position('nobilia_location_yaw')
-    # origin_pose = gm.frame3_rpy(0, 0, 0, shelf_location)
-    origin_pose = gm.frame3_rpy(0, 0, shelf_yaw, shelf_location)
-    create_nobilia_shelf(km, Path('nobilia'), origin_pose)
+    model_name = load_localized_model(km, model_path, reference_frame)
     
     km.clean_structure()
     km.dispatch_events()
@@ -81,16 +89,18 @@ if __name__ == '__main__':
                     'torso_lift_joint'   : 0.16825}
     resting_pose = {gm.Position(Path(f'pr2/{n}')): v for n, v in resting_pose.items()}
 
+    nav_method = rospy.get_param('~nav_method', 'proj')
+
     behavior = ROSPushingBehavior(km,
                                   Path('pr2'),
                                   eef_path,
-                                  [Path('nobilia/links/panel_bottom')],
+                                  [Path(p) for p in body_paths],
                                   robot_controlled_symbols,
                                   {s: str(Path(gm.erase_type(s))[-1]) for s in robot_controlled_symbols},
                                   cam_path,
                                   resting_pose=resting_pose,
                                   visualizer=visualizer,
-                                  navigation_method='proj')
+                                  navigation_method=nav_method)
 
     while not rospy.is_shutdown():
         rospy.sleep(0.3)

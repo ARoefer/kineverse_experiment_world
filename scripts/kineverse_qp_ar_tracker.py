@@ -15,7 +15,8 @@ from kineverse.utils import union
 from kineverse.urdf_fix import load_urdf_file
 
 from kineverse_experiment_world.qp_state_model import QPStateModel, QPSolverException
-from kineverse_experiment_world.nobilia_shelf  import create_nobilia_shelf
+from kineverse_experiment_world.utils          import load_localized_model
+
 from kineverse_experiment_world.msg import TransformStampedArray as TransformStampedArrayMsg
 
 def np_frame3_quaternion(x, y, z, qx, qy, qz, qw):
@@ -250,27 +251,7 @@ if __name__ == '__main__':
 
     km = GeometryModel()
 
-    if model_path != 'nobilia':
-        urdf_model = load_urdf_file(model_path)
-        model_name = urdf_model.name
-
-        obj_location = gm.point3(*[gm.Position(f'{urdf_model.name}_location_{x}') for x in 'xyz'])
-        obj_yaw      = gm.Position(f'{urdf_model.name}_location_yaw')
-        origin_pose  = gm.frame3_rpy(0, 0, obj_yaw, obj_location)
-
-        load_urdf(km,
-                  Path(model_name),
-                  urdf_model,
-                  reference_frame,
-                  root_transform=origin_pose)
-    else:
-        shelf_location = gm.point3(*[gm.Position(f'nobilia_location_{x}') for x in 'xyz'])
-
-        shelf_yaw = gm.Position('nobilia_location_yaw')
-        # origin_pose = gm.frame3_rpy(0, 0, 0, shelf_location)
-        origin_pose = gm.frame3_rpy(0, 0, shelf_yaw, shelf_location)
-        create_nobilia_shelf(km, Path('nobilia'), origin_pose, parent_path=Path(reference_frame))
-        model_name = 'nobilia'
+    model_name = load_localized_model(km, model_path, reference_frame)
 
     km.clean_structure()
     km.dispatch_events()

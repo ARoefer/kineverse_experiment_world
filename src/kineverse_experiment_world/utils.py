@@ -130,3 +130,28 @@ def insert_diff_base(km,
                                                            Path(world_frame),
                                                            robot_path + Path(f'links/{root_link}')))
     km.clean_structure()
+
+
+def load_localized_model(km, model_path, reference_frame):
+    if model_path != 'nobilia':
+        urdf_model = load_urdf_file(model_path)
+
+        obj_location = gm.point3(*[gm.Position(f'{urdf_model.name}_location_{x}') for x in 'xyz'])
+        obj_yaw      = gm.Position(f'{urdf_model.name}_location_yaw')
+        origin_pose  = gm.frame3_rpy(0, 0, obj_yaw, obj_location)
+
+        load_urdf(km,
+                  Path(urdf_model.name),
+                  urdf_model,
+                  reference_frame,
+                  root_transform=origin_pose)
+
+        return urdf_model.name
+    else:
+        shelf_location = gm.point3(*[gm.Position(f'nobilia_location_{x}') for x in 'xyz'])
+
+        shelf_yaw = gm.Position('nobilia_location_yaw')
+        # origin_pose = gm.frame3_rpy(0, 0, 0, shelf_location)
+        origin_pose = gm.frame3_rpy(0, 0, shelf_yaw, shelf_location)
+        create_nobilia_shelf(km, Path('nobilia'), origin_pose, parent_path=Path(reference_frame))
+        return 'nobilia'

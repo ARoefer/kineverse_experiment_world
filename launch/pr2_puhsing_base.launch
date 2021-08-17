@@ -1,8 +1,8 @@
 <launch>
 	<arg name="object" default="nobilia"/>
 
-	<include file="$(find kineverse_experiment_world)/launch/pr2_nobilia_estimation.launch" if="$(arg object) == 'nobilia'"/>
-	<include file="$(find kineverse_experiment_world)/launch/pr2_shelf_door_estimation.launch" if="$(arg object) == 'shelf_door'"/>
+	<include file="$(find kineverse_experiment_world)/launch/pr2_nobilia_estimation.launch" if="$(eval arg('object') == 'nobilia')"/>
+	<include file="$(find kineverse_experiment_world)/launch/pr2_shelf_door_estimation.launch" if="$(eval arg('object') == 'shelf_door')"/>
 
 	<include file="$(find kineverse_experiment_world)/launch/pr2_vel_control.launch"/>
 </launch>
