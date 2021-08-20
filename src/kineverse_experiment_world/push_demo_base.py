@@ -19,7 +19,7 @@ def sign(x):
 
 def generate_push_closing(km, grounding_state, controlled_symbols, 
                           eef_pose, obj_pose, eef_path, obj_path, 
-                          nav_method='cross', cp_offset=0):
+                          nav_method='cross', cp_offset=0, static_symbols=set()):
     # CONTACT GEOMETRY
     robot_cp, object_cp, contact_normal = contact_geometry(eef_pose, obj_pose, eef_path, obj_path)
     object_cp     = object_cp - contact_normal * cp_offset
@@ -30,7 +30,8 @@ def generate_push_closing(km, grounding_state, controlled_symbols,
     # This is exploiting task knowledge which makes this function inflexible.
     contact_grad    = sum([sign(-grounding_state[s]) * gm.vector3(gm.diff(object_cp[0], s), 
                                                                   gm.diff(object_cp[1], s), 
-                                                                  gm.diff(object_cp[2], s)) for s in gm.free_symbols(obj_pose)], gm.vector3(0,0,0))
+                                                                  gm.diff(object_cp[2], s)) for s in gm.free_symbols(obj_pose) 
+                                                                                             if s not in static_symbols], gm.vector3(0,0,0))
     neutral_tangent = gm.cross(contact_grad, contact_normal)
     active_tangent  = gm.cross(neutral_tangent, contact_normal)
 
@@ -97,6 +98,7 @@ class PushingController(object):
 
         all_controlled_symbols = controlled_symbols.union({gm.DiffSymbol(j) for j in gm.free_symbols(target_object.pose)
                                                                             if 'location' not in str(j)})
+        static_symbols = {s for s in gm.free_symbols(target_object.pose) if 'location' in str(s)}
 
         # Generate push problem
         constraints, \
@@ -109,7 +111,8 @@ class PushingController(object):
                                                  target_object.pose,
                                                  actuated_object_path,
                                                  target_object_path,
-                                                 navigation_method)
+                                                 navigation_method,
+                                                 static_symbols=static_symbols)
 
         start_state.update({s: 0.0 for s in gm.free_symbols(coll_world)})
 
