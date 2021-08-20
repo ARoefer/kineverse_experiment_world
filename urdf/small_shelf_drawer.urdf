@@ -1,0 +1,197 @@
+<robot name="small_shelf_drawer">
+  <link name="body">
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0.1885"/>
+      <geometry>
+        <box size="0.392 0.413 0.036"/>
+      </geometry>
+    </visual>
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 -0.1885"/>
+      <geometry>
+        <box size="0.392 0.413 0.036"/>
+      </geometry>
+    </visual>
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0.1875 0"/>
+      <geometry>
+        <box size="0.392 0.038 0.347"/>
+      </geometry>
+    </visual>
+    <visual>
+      <origin rpy="0 0 0" xyz="0 -0.1875 0"/>
+      <geometry>
+        <box size="0.392 0.038 0.347"/>
+      </geometry>
+    </visual>
+    <visual>
+      <origin rpy="0 0 0" xyz="-0.178 0 0"/>
+      <geometry>
+        <box size="0.036 0.347 0.341"/>
+      </geometry>
+    </visual>
+  </link>
+  
+  <link name="drawer_top">
+    <origin rpy="0 0 0" xyz="0 0 0"/>
+    <visual>
+      <origin rpy="0 0 0" xyz="0.166 0 0"/>
+      <geometry>
+        <box size="0.015 0.33 0.16"/>
+      </geometry>
+    </visual>
+    <visual>
+      <origin rpy="0 0 0" xyz="-0.0065 0.144 -0.02"/>
+      <geometry>
+        <box size="0.33 0.012 0.085"/>
+      </geometry>
+    </visual>
+    <visual>
+      <origin rpy="0 0 0" xyz="-0.0065 -0.144 -0.0295"/>
+      <geometry>
+        <box size="0.33 0.012 0.085"/>
+      </geometry>
+    </visual>
+    <visual>
+      <origin rpy="0 0 0" xyz="-0.1675 0 -0.02"/>
+      <geometry>
+        <box size="0.012 0.276 0.085"/>
+      </geometry>
+    </visual>
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 -0.05"/>
+      <geometry>
+        <box size="0.33 0.276 0.01"/>
+      </geometry>
+    </visual>
+  </link>
+
+  <joint name="drawer_top_joint" type="prismatic">
+    <origin rpy="0 0 0" xyz="0.02 0 0.08525" />
+    <parent link="body" />
+    <child link="drawer_top" />
+    <axis xyz="1 0 0" />
+    <limit effort="60" lower="0.0" upper="0.22" velocity="1.0"/>
+  </joint>
+
+  <link name="handle_top">
+    <visual>
+      <origin rpy="1.57 0 0" xyz="0.05 0 0"/>
+      <geometry>
+        <cylinder radius="0.005" length="0.14"/>
+      </geometry>
+    </visual>
+    <visual>
+      <origin rpy="0 1.57 0" xyz="0.025 0.07 0"/>
+      <geometry>
+        <cylinder radius="0.005" length="0.05"/>
+      </geometry>
+    </visual>
+    <visual>
+      <origin rpy="0 1.57 0" xyz="0.025 -0.07 0"/>
+      <geometry>
+        <cylinder radius="0.005" length="0.05"/>
+      </geometry>
+    </visual>
+  </link>
+  
+  <joint name="handle_top_joint" type="fixed">
+    <origin rpy="0 0 0" xyz="0.1735 0 0" />
+    <parent link="drawer_top" />
+    <child link="handle_top" />
+  </joint>
+
+
+  <link name="drawer_bottom">
+    <origin rpy="0 0 0" xyz="0.02 0 0"/>
+    <visual>
+      <origin rpy="0 0 0" xyz="0.166 0 0"/>
+      <geometry>
+        <box size="0.015 0.33 0.16"/>
+      </geometry>
+    </visual>
+    <visual>
+      <origin rpy="0 0 0" xyz="-0.0065 0.144 -0.0295"/>
+      <geometry>
+        <box size="0.33 0.012 0.085"/>
+      </geometry>
+    </visual>
+    <visual>
+      <origin rpy="0 0 0" xyz="-0.0065 -0.144 -0.0295"/>
+      <geometry>
+        <box size="0.33 0.012 0.085"/>
+      </geometry>
+    </visual>
+    <visual>
+      <origin rpy="0 0 0" xyz="-0.1675 0 -0.0295"/>
+      <geometry>
+        <box size="0.012 0.276 0.085"/>
+      </geometry>
+    </visual>
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 -0.05"/>
+      <geometry>
+        <box size="0.33 0.276 0.1"/>
+      </geometry>
+    </visual>
+  </link>
+
+  <joint name="drawer_bottom_joint" type="prismatic">
+    <origin rpy="0 0 0" xyz="0 0 -0.08525" />
+    <parent link="body" />
+    <child link="drawer_bottom" />
+    <axis xyz="1 0 0" />
+    <limit effort="60" lower="0.0" upper="0.22" velocity="1.0"/>
+  </joint>
+
+  <link name="handle_bottom">
+    <visual>
+      <origin rpy="1.57 0 0" xyz="0.05 0 0"/>
+      <geometry>
+        <cylinder radius="0.005" length="0.14"/>
+      </geometry>
+    </visual>
+    <visual>
+      <origin rpy="0 1.57 0" xyz="0.025 0.07 0"/>
+      <geometry>
+        <cylinder radius="0.005" length="0.05"/>
+      </geometry>
+    </visual>
+    <visual>
+      <origin rpy="0 1.57 0" xyz="0.025 -0.07 0"/>
+      <geometry>
+        <cylinder radius="0.005" length="0.05"/>
+      </geometry>
+    </visual>
+  </link>
+  
+  <joint name="handle_bottom_joint" type="fixed">
+    <origin rpy="0 0 0" xyz="0.1735 0 0" />
+    <parent link="drawer_bottom" />
+    <child link="handle_bottom" />
+  </joint>
+
+  <link name="marker_body"/>
+
+  <joint name="marker_body_joint" type="fixed">
+    <origin rpy="0 0 0" xyz="-0.147 0.1575 0.2065"/>
+    <parent link="body"/>
+    <child  link="marker_body"/>
+  </joint>
+
+  <link name="marker_drawer_top"/>
+
+  <joint name="marker_drawer_top_joint" type="fixed">
+    <origin rpy="1.57 0 1.57" xyz="0.1735 -0.116 0.031"/>
+    <parent link="drawer_top"/>
+    <child  link="marker_drawer_top"/>
+  </joint>
+
+  <link name="marker_drawer_bottom"/>
+
+  <joint name="marker_drawer_bottom_joint" type="fixed">
+    <origin rpy="1.57 0 1.57" xyz="0.1735 -0.116 0.031"/>
+    <parent link="drawer_bottom"/>
+    <child  link="marker_drawer_bottom"/>
+  </joint>
+</robot>

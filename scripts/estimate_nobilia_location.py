@@ -90,6 +90,8 @@ if __name__ == '__main__':
 
     rate = rospy.Duration(1 / grab_rate )
 
+    print(f'Attempting to gather observations of {body_marker_name} in {reference_frame}')
+
     while not rospy.is_shutdown():
         start = rospy.Time.now()
 

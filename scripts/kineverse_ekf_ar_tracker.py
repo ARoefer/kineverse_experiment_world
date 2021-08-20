@@ -57,7 +57,7 @@ class Kineverse6DEKFTracker(object):
             noise_estimation_observations (int): Number of observations to collect before initializing the EKFs
             estimate_init_steps (int): Number of steps used to initialize the estimate of an ekf
         """
-        poses = {p: km.get_data(p) for p in paths_observables}
+        poses = {obs_name: km.get_data(p) for p, obs_name in paths_observables.items()}
         poses = {str(p): pose.pose if isinstance(pose, Frame) else pose for p, pose in poses.items()}
         # obs_features = {p: generate_6d_feature(pose) for p, pose in poses.items()}
         obs_features = {p: pose for p, pose in poses.items()}
@@ -96,7 +96,7 @@ class Kineverse6DEKFTracker(object):
         print(f'Generated {len(self.ekfs)} EKFs:\n  '
                '\n  '.join(str(e) for e in self.ekfs))
 
-        self.observation_names = [str(p) for p in paths_observables]
+        self.observation_names = list(poses.keys()) # [str(p) for p in paths_observables]
         self.controls          = set(sum([e.ordered_controls for e in self.ekfs], []))
 
         self.estimates   = [None] * len(self.ekfs)
@@ -292,12 +292,16 @@ if __name__ == '__main__':
         print(f'Failed to get nobilia localization params. Original error:\n{e}')
         exit()
 
+    reference_frame = rospy.get_param('~reference_frame', 'world')
+    grab_from_tf    = rospy.get_param('~grab_from_tf', False)
+    grab_rate       = rospy.get_param('~grab_rate', 20.0)
+
     shelf_location = gm.point3(location_x, location_y, location_z)
 
     # origin_pose = gm.frame3_rpy(0, 0, 0, shelf_location)
     origin_pose = gm.frame3_rpy(0, 0, location_yaw, shelf_location)
 
-    create_nobilia_shelf(km, Path('nobilia'), origin_pose)
+    create_nobilia_shelf(km, Path('nobilia'), origin_pose, parent_path=Path(reference_frame))
 
     km.clean_structure()
     km.dispatch_events()
@@ -306,7 +310,7 @@ if __name__ == '__main__':
     tracker = Kineverse6DEKFTracker(km, 
                                     # [Path(f'nobilia/markers/{name}') for name in shelf.markers.keys()], # 
                                     # [Path(f'nobilia/markers/body')],
-                                    [Path(f'nobilia/markers/top_panel')],
+                                    {Path(f'nobilia/markers/top_panel'): 'obs_shelf_body'},
                                     #{x: x for x in gm.free_symbols(origin_pose)},
                                     noise_estimation_observations=20,
                                     estimate_init_steps=1000)
@@ -315,9 +319,6 @@ if __name__ == '__main__':
 
 
 
-    reference_frame = rospy.get_param('~reference_frame', 'world')
-    grab_from_tf    = rospy.get_param('~grab_from_tf', False)
-    grab_rate       = rospy.get_param('~grab_rate', 20.0)
 
     tf_buffer = tf2_ros.Buffer()
     listener  = tf2_ros.TransformListener(tf_buffer)
@@ -328,17 +329,17 @@ if __name__ == '__main__':
         if grab_from_tf:
             start = rospy.Time.now()
 
+            msg = TransformStampedArrayMsg()
             for obs in tracker.observation_names:
                 try:
                     trans = tf_buffer.lookup_transform(reference_frame, obs, rospy.Time(0))
-                    msg = PoseStampedMsg()
-                    msg.header.frame_id  = obs
-                    msg.pose.position    = trans.transform.translation
-                    msg.pose.orientation = trans.transform.rotation
-                    node.cb_obs(msg)
+                    msg.transforms.append(trans)
                 except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
                     print(f'Exception raised while looking up {obs} -> {reference_frame}:\n{e}')
-                    continue
+                    break
+            else:
+                node.cb_obs(msg)
+
             
             time_remaining = rate - (rospy.Time.now() - start)
             if time_remaining > rospy.Duration(0):

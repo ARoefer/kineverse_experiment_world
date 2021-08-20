@@ -158,6 +158,8 @@ class ROSQPEManager(object):
     def cb_obs(self, transform_stamped_array_msg):
         ref_frames = {}
         
+        num_valid_obs = 0
+
         for trans in transform_stamped_array_msg.transforms:
             if trans.child_frame_id not in self.observation_aliases:
                 continue
@@ -191,6 +193,7 @@ class ROSQPEManager(object):
                 matrix = np_ref_trans.dot(matrix)
             
             self.last_observation[self.observation_aliases[trans.child_frame_id]] = matrix
+            num_valid_obs += 1
                 # self.last_observation[trans.child_frame_id] = np_6d_pose_feature(trans.transform.translation.x, 
                 #                                                                  trans.transform.translation.y, 
                 #                                                                  trans.transform.translation.z,
@@ -200,6 +203,9 @@ class ROSQPEManager(object):
                 #                                                                  trans.transform.rotation.w)
         else:
             try:
+                if num_valid_obs == 0:
+                    return
+
                 self.tracker.process_observation(self.last_observation)
             except QPSolverException as e:
                 print(f'Solver crashed during observation update. Skipping observation...')
@@ -243,10 +249,11 @@ if __name__ == '__main__':
 
     reference_frame = rospy.get_param('~reference_frame', 'world')
     model_path      = rospy.get_param('~model')
-    observations    = rospy.get_param('~observations', None)
+    observations    = rospy.get_param('~features', None)
 
     if type(observations) is not dict:
-        print('Required parameter ~observations needs to be a dict mapping tracked model paths to observation names')
+        print(type(observations))
+        print('Required parameter ~features needs to be a dict mapping tracked model paths to observation names')
         exit(1)
 
     km = GeometryModel()
@@ -263,7 +270,7 @@ if __name__ == '__main__':
                          model,
                          Path(model_name),
                          reference_frame,
-                         observation_alias=aliases)
+                         observation_alias=observations)
 
     while not rospy.is_shutdown():
         rospy.sleep(0.1)

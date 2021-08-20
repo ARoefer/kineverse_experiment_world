@@ -80,7 +80,7 @@
   <link name="marker_body"/>
 
   <joint name="marker_body_joint" type="fixed">
-    <origin rpy="0 0 1.57" xyz="0 0 0.2065"/>
+    <origin rpy="0 0 -1.57" xyz="-0.147 0.1575 0.2065"/>
     <parent link="body"/>
     <child  link="marker_body"/>
   </joint>
@@ -88,7 +88,7 @@
   <link name="marker_door"/>
 
   <joint name="marker_door_joint" type="fixed">
-    <origin rpy="0 0 0" xyz="0.0075 0 0"/>
+    <origin rpy="1.57 0 1.57" xyz="0.0075 -0.1235 0.1255"/>
     <parent link="door"/>
     <child  link="marker_door"/>
   </joint>  

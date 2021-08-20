@@ -16,7 +16,7 @@ from kineverse.operations.special_kinematics  import create_diff_drive_joint_wit
                                                      CreateAdvancedFrameConnection
 
 from kineverse_experiment_world.nobilia_shelf import create_nobilia_shelf
-from kineverse_experiment_world.utils import insert_omni_base
+from kineverse_experiment_world.utils import insert_omni_base, load_localized_model
 
 from kineverse_experiment_world.ros_pushing_controller import ROSPushingBehavior
 
