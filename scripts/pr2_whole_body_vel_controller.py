@@ -29,13 +29,14 @@ class JointController(object):
 if __name__ == '__main__':
 	rospy.init_node('whole_body_velocity_controller')
 
-	joints = ['l_elbow_flex_joint',
-			  'l_forearm_roll_joint',
-			  'l_shoulder_lift_joint',
-			  'l_shoulder_pan_joint',
-			  'l_upper_arm_roll_joint',
-			  'l_wrist_flex_joint',
-			  'l_wrist_roll_joint',
+	joints = [
+			  # 'l_elbow_flex_joint',
+			  # 'l_forearm_roll_joint',
+			  # 'l_shoulder_lift_joint',
+			  # 'l_shoulder_pan_joint',
+			  # 'l_upper_arm_roll_joint',
+			  # 'l_wrist_flex_joint',
+			  # 'l_wrist_roll_joint',
 			  'r_elbow_flex_joint',
 			  'r_forearm_roll_joint',
 			  'r_shoulder_lift_joint',
