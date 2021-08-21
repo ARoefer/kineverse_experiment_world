@@ -37,12 +37,12 @@ def generate_push_closing(km, grounding_state, controlled_symbols,
 
     target_pos = None
     if nav_method == 'linear':
-        geom_distance = gm.norm(object_cp + active_tangent * geom_distance - robot_cp)
+        geom_distance = gm.norm(object_cp + active_tangent * geom_distance + contact_grad * 0.05 - robot_cp)
     elif nav_method == 'cubic':
         dist_scaling  = 2 ** (-0.5*((geom_distance - 0.2) / (0.2 * 0.2))**2)
         geom_distance = gm.norm(object_cp + active_tangent * dist_scaling - robot_cp)
     elif nav_method == 'cross':
-        geom_distance = gm.norm(object_cp + active_tangent * gm.norm(neutral_tangent) - robot_cp)
+        geom_distance = gm.norm(object_cp + active_tangent * gm.norm(neutral_tangent) + contact_grad * 0.05 - robot_cp)
     elif nav_method == 'none' or nav_method is None:
         pass
     elif nav_method == 'proj':
