@@ -161,6 +161,10 @@ class ROSOpeningBehavior(object):
                     self._phase = 'homing'
                     print(f'Now entering {self._phase} state')
                 else:
+                    print('Closing gripper...')
+                    self._sync_set_gripper_position(0)
+                    print('Generating opening controller')
+                    
                     eef = self.km.get_data(self.eef_path)
                     obj = self.km.get_data(self._current_target)
                     with self._state_lock:
