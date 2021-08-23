@@ -1,0 +1,35 @@
+<launch>
+	<arg name="object" default="nobilia"/>
+
+	<include file="$(find kineverse_experiment_world)/launch/pr2_pushing_base.launch">
+		<arg name="object" value="$(arg object)"/>
+	</include>
+
+
+	<node name="pr2_pushing" pkg="kineverse_experiment_world" type="pr2_pushing.py" output="screen" if="$(eval arg('object') == 'nobilia')">
+		<remap from="~robot_command" to="/pr2_vel_controller/command"/>
+		<remap from="~external_command" to="/nobilia_estimator/controls"/>
+		<remap from="~external_js" to="/nobilia_estimator/state_estimate"/>
+		<remap from="/joint_states" to="/joint_states"/>
+		<param name="~model" value="nobilia"/>
+		<param name="~links" type="yaml" value="{nobilia/links/handle: [0.04, 0, 0, 1.57, 0, 3.14]}"/>
+	</node>
+
+	<node name="pr2_pushing" pkg="kineverse_experiment_world" type="pr2_pushing.py" output="screen" if="$(eval arg('object') == 'shelf_door')">
+		<remap from="~robot_command" to="/pr2_vel_controller/command"/>
+		<remap from="~external_command" to="/shelf_door_estimator/controls"/>
+		<remap from="~external_js" to="/shelf_door_estimator/state_estimate"/>
+		<remap from="/joint_states" to="/joint_states"/>
+		<param name="~model" value="package://kineverse_experiment_world/urdf/small_shelf_door.urdf"/>
+		<param name="~links" type="yaml" value="{small_shelf_door/links/handle: [0.04, 0, 0, 1.57, 0, 3.14]}"/>
+	</node>
+
+	<node name="pr2_pushing" pkg="kineverse_experiment_world" type="pr2_pushing.py" output="screen" if="$(eval arg('object') == 'shelf_drawer')">
+		<remap from="~robot_command" to="/pr2_vel_controller/command"/>
+		<remap from="~external_command" to="/shelf_drawer_estimator/controls"/>
+		<remap from="~external_js" to="/shelf_drawer_estimator/state_estimate"/>
+		<remap from="/joint_states" to="/joint_states"/>
+		<param name="~model" value="package://kineverse_experiment_world/urdf/small_shelf_drawer.urdf"/>
+		<param name="~links" type="yaml" value="{small_shelf_drawer/links/handle_top: [0.04, 0, 0, 1.57, 0, 3.14], small_shelf_drawer/links/handle_bottom: [0.04, 0, 0, 1.57, 0, 3.14]}"/>
+	</node>
+</launch>
