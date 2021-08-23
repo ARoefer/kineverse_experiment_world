@@ -13,46 +13,8 @@ from kineverse.model.geometry_model  import RigidBody
 from sensor_msgs.msg    import JointState as JointStateMsg
 from kineverse_msgs.msg import ValueMap   as ValueMapMsg
 
-from kineverse_experiment_world.push_demo_base import PushingController
-
-class TuckingController(object):
-    def __init__(self, km, controlled_symbols, resting_pose, camera_path=None):
-        tucking_constraints = {}
-        if resting_pose is not None:
-            tucking_constraints = {f'tuck {s}': SC(p - s, p - s, 1, s) for s, p in resting_pose.items()}
-            # print('Tuck state:\n  {}\nTucking constraints:\n  {}'.format('\n  '.join(['{}: {}'.format(k, v) for k, v in self._resting_pose.items()]), '\n  '.join(tucking_constraints.keys())))
-
-        # tucking_constraints.update(self.taxi_constraints)
-
-        if camera_path is not None:
-            self._poi_pos = gm.Symbol('poi')
-            poi = gm.point3(1.5, 0.5, 0.0) + gm.vector3(0, self._poi_pos * 2.0, 0)
-
-            camera = km.get_data(camera_path)
-            cam_to_poi = poi - gm.pos_of(camera.pose)
-            lookat_dot = 1 - gm.dot_product(gm.x_of(camera.pose), cam_to_poi) / gm.norm(cam_to_poi)
-            tucking_constraints['sweeping gaze'] = SC(-lookat_dot * 5, -lookat_dot * 5, 1, lookat_dot)
-
-        symbols = set()
-        for c in tucking_constraints.values():
-            symbols |= gm.free_symbols(c.expr)
-
-        joint_symbols      = {s for s in symbols if gm.get_symbol_type(s) != gm.TYPE_UNKNOWN}
-        controlled_symbols = {gm.DiffSymbol(s) for s in joint_symbols}
-        
-        hard_constraints = km.get_constraints_by_symbols(symbols.union(controlled_symbols))
-
-        controlled_values, hard_constraints = generate_controlled_values(hard_constraints, controlled_symbols)
-        controlled_values = depth_weight_controlled_values(km, controlled_values)
-
-        self.qpb = TQPB(hard_constraints, tucking_constraints, controlled_values)
-        self._start = rospy.Time.now()
-
-    def get_cmd(self, state, deltaT):
-        _state = state.copy()
-        _state[self._poi_pos] = math.sin((rospy.Time.now() - self._start).to_sec())
-
-        return self.qpb.get_cmd(_state)
+from kineverse_experiment_world.push_demo_base  import PushingController
+from kineverse_experiment_world.idle_controller import IdleController
 
 
 class ROSPushingBehavior(object):
@@ -86,10 +48,10 @@ class ROSPushingBehavior(object):
         self._robot_cmd_msg.name = list(control_alias.keys())
         self._last_external_cmd_msg = None
 
-        self._idle_controller = TuckingController(km, 
-                                                  self.controlled_symbols,
-                                                  resting_pose,
-                                                  cam_path)
+        self._idle_controller = IdleController(km, 
+                                               self.controlled_symbols,
+                                               resting_pose,
+                                               cam_path)
 
         self._build_ext_symbol_map(km, ext_paths)
 
