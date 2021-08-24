@@ -1,4 +1,6 @@
 <launch>
+    <arg name="tracking_samples" default="7"/>
+
 	<include file="$(find kineverse_experiment_world)/launch/pr2_aruco_shelf_drawer_tracking.launch"/>
 
     <node name="shelf_drawer_estimator" pkg="kineverse_experiment_world" type="kineverse_qp_ar_tracker.py" output="screen">
@@ -7,5 +9,6 @@
         <param name="~model" value="package://kineverse_experiment_world/urdf/small_shelf_drawer.urdf"/>
         <param name="~features" type="yaml" value="{small_shelf_drawer/links/marker_body: obs_shelf_body, small_shelf_drawer/links/marker_drawer_top: obs_shelf_top_drawer, small_shelf_drawer/links/marker_drawer_bottom: obs_shelf_bottom_drawer}"/>
         <param name="~reference_frame" value="base_footprint"/>
+        <param name="~samples" value="$(arg tracking_samples)"/>
     </node>
 </launch>

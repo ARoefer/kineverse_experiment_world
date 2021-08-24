@@ -48,7 +48,7 @@ def generate_6d_feature(pose):
 
 
 class Kineverse6DQPTracker(object):
-    def __init__(self, km, paths_observables, transition_rules=None):
+    def __init__(self, km, paths_observables, transition_rules=None, num_samples=10):
         """Initializes the tracker to estimate variables based 
            on the given paths. The paths are assumed to point to
            6D poses.
@@ -92,7 +92,8 @@ class Kineverse6DQPTracker(object):
 
         tracking_pools  = final_pools
         self.estimators = [QPStateModel(km, dict(features),
-                                        transition_rules=transition_rules) for symbols, features in tracking_pools]
+                                        transition_rules=transition_rules,
+                                        num_samples=num_samples) for symbols, features in tracking_pools]
 
         print(f'Generated {len(self.estimators)} Estimators:\n  '
                '\n  '.join(str(e) for e in self.estimators))
@@ -250,6 +251,7 @@ if __name__ == '__main__':
     reference_frame = rospy.get_param('~reference_frame', 'world')
     model_path      = rospy.get_param('~model')
     observations    = rospy.get_param('~features', None)
+    num_samples     = rospy.get_param('~samples', 5)
 
     if type(observations) is not dict:
         print(type(observations))
@@ -264,7 +266,7 @@ if __name__ == '__main__':
     km.dispatch_events()
 
     model   = km.get_data(model_name)
-    tracker = Kineverse6DQPTracker(km, observations.keys())
+    tracker = Kineverse6DQPTracker(km, observations.keys(), num_samples=num_samples)
 
     node = ROSQPEManager(tracker,
                          model,

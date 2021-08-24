@@ -21,7 +21,7 @@ class Particle(object):
 class QPStateModel(object):
     DT_SYM = gm.Symbol('dt')
 
-    def __init__(self, km, observations, transition_rules=None, max_iterations=20):
+    def __init__(self, km, observations, transition_rules=None, max_iterations=20, num_samples=7):
         """Sets up an EKF estimating the underlying state of a set of observations.
         
         Args:
@@ -33,6 +33,7 @@ class QPStateModel(object):
         """
         state_vars = union([gm.free_symbols(o) for o in observations.values()])
 
+        self.num_samples = num_samples
 
         self.ordered_vars,  \
         self.transition_fn, \
@@ -159,8 +160,8 @@ class QPStateModel(object):
         x_n_1   = np.array([self._obs_state[s] for s in self.ordered_vars]).flatten()
 
         self._state_buffer.append(x_n_1)
-        if len(self._state_buffer) > 7:
-            self._state_buffer = self._state_buffer[-7:]
+        if len(self._state_buffer) > self.num_samples:
+            self._state_buffer = self._state_buffer[-self.num_samples:]
 
         state_mean = np.mean(self._state_buffer, axis=0)
 

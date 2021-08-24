@@ -1,5 +1,7 @@
 <launch>
-	<include file="$(find kineverse_experiment_world)/launch/pr2_aruco_nobilia_tracking.launch"/>
+	<arg name="tracking_samples" default="7"/>
+
+    <include file="$(find kineverse_experiment_world)/launch/pr2_aruco_nobilia_tracking.launch"/>
 
     <node name="nobilia_estimator" pkg="kineverse_experiment_world" type="kineverse_qp_ar_tracker.py" output="screen">
         <remap from="~observations" to="/aruco_publisher/observations"/>
@@ -7,5 +9,6 @@
         <param name="~model" value="nobilia"/>
         <param name="~features" type="yaml" value="{nobilia/markers/body: obs_nobilia_body, nobilia/markers/top_panel: obs_nobilia_top_panel}"/>
         <param name="~reference_frame" value="base_footprint"/>
+        <param name="~samples" value="$(arg tracking_samples)"/>
     </node>
 </launch>
