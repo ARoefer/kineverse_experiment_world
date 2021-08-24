@@ -28,24 +28,24 @@ class CascadingQP(object):
         self.follower_symbols = follower_symbols
 
         self.lead_controlled_symbols     = {gm.DiffSymbol(s) for s in lead_symbols 
-                                                        if gm.get_symbol_type(s) != gm.TYPE_UNKNOWN 
-                                                        and gm.DiffSymbol(s) not in controls_blacklist}
+                                                             if gm.get_symbol_type(s) != gm.TYPE_UNKNOWN 
+                                                             and gm.DiffSymbol(s) not in controls_blacklist}
         # Only update the symbols that are unique to the follower
         self.follower_controlled_symbols = {gm.DiffSymbol(s) for s in follower_symbols 
-                                                        if gm.get_symbol_type(s) != gm.TYPE_UNKNOWN 
-                                                        and s not in lead_symbols 
-                                                        and gm.DiffSymbol(s) not in controls_blacklist}
+                                                             if gm.get_symbol_type(s) != gm.TYPE_UNKNOWN 
+                                                             and s not in lead_symbols 
+                                                             and gm.DiffSymbol(s) not in controls_blacklist}
         
         f_gen_lead_cvs = self.gen_controlled_values if f_gen_lead_cvs is None else f_gen_lead_cvs
         lead_cvs, \
         lead_constraints = f_gen_lead_cvs(km, 
-                                          km.get_constraints_by_symbols(lead_symbols.union(self.lead_controlled_symbols)),
+                                          km.get_constraints_by_symbols(self.lead_controlled_symbols.union({gm.IntSymbol(s) for s in self.lead_controlled_symbols})),
                                           self.lead_controlled_symbols)
         
         f_gen_follower_cvs = self.gen_controlled_values if f_gen_follower_cvs is None else f_gen_follower_cvs
         follower_cvs, \
         follower_constraints = f_gen_follower_cvs(km, 
-                                                  km.get_constraints_by_symbols(follower_symbols.union(self.follower_controlled_symbols)),
+                                                  km.get_constraints_by_symbols(self.follower_controlled_symbols.union({gm.IntSymbol(s) for s in self.follower_controlled_symbols})),
                                                   self.follower_controlled_symbols)
 
         if issubclass(t_leader, GQPB):
@@ -67,7 +67,9 @@ class CascadingQP(object):
 
         self.follower_o_symbols, \
         self.follower_t_function, \
-        self.follower_o_controls = generate_transition_function(self.sym_dt, follower_symbols, transition_overrides)
+        self.follower_o_controls = generate_transition_function(self.sym_dt, 
+                                                                {gm.IntSymbol(s) for s in self.follower_controlled_symbols}, 
+                                                                transition_overrides)
 
         self.follower_delta_map = {gm.IntSymbol(s): s for s in self.follower_controlled_symbols}
 
@@ -102,6 +104,8 @@ class CascadingQP(object):
         lead_cmd = self.lead_qp.get_cmd(local_state, deltaT=deltaT)
         local_state[self.sym_dt] = deltaT
 
+        print('Lead cmd:\n  {}'.format('\n  '.join(f'{s}: {v}' for s, v in lead_cmd.items())))
+
         for s, v in zip(self.lead_o_symbols,
                         self.lead_t_function.call2([local_state[s] if s not in lead_cmd else lead_cmd[s] 
                                                                    for s in self.lead_o_controls])):
@@ -124,4 +128,14 @@ class CascadingQP(object):
 
     def equilibrium_reached(self, low_eq=1e-3, up_eq=-1e-3):
         return self.lead_qp.equilibrium_reached(low_eq, up_eq)
+
+    def __str__(self):
+        return ''.join(['CascadingQP:',
+                        '\n Leader:',
+                        '\n  Symbols:\n   {}'.format('\n   '.join(sorted(str(s) for s in self.lead_symbols))),
+                        '\n  Controls:\n   {}'.format('\n   '.join(sorted(str(s) for s in self.lead_controlled_symbols))),
+                        '\n Follower:',
+                        '\n  Symbols:\n   {}'.format('\n   '.join(sorted(str(s) for s in self.follower_symbols))),
+                        '\n  Controls:\n   {}'.format('\n   '.join(sorted(str(s) for s in self.follower_controlled_symbols)))
+                       ])
 

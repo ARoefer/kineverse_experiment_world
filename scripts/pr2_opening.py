@@ -3,6 +3,8 @@ import rospy
 
 import kineverse.gradients.gradient_math as gm
 
+from multiprocessing import RLock
+
 from kineverse.model.paths                    import Path, CPath
 from kineverse.model.geometry_model           import GeometryModel, \
                                                      Path
@@ -18,7 +20,51 @@ from kineverse.operations.special_kinematics  import create_diff_drive_joint_wit
 from kineverse_experiment_world.nobilia_shelf import create_nobilia_shelf
 from kineverse_experiment_world.utils import insert_omni_base, load_localized_model
 
-from kineverse_experiment_world.ros_opening_controller import ROSOpeningBehavior
+from kineverse_experiment_world.ros_opening_controller import ROSOpeningBehavior, GripperWrapper
+
+from pr2_controllers_msgs.msg import Pr2GripperCommand    as Pr2GripperCommandMsg, \
+                                     JointControllerState as JointControllerStateMsg
+
+class PR2GripperWrapper(GripperWrapper):
+    def __init__(self, topic):
+        self._error_deltas = []
+        self._last_error   = None
+        self._last_error_stamp = None
+        self._error_lock   = RLock()
+
+        self.pub_gripper_command = rospy.Publisher(f'{topic}/command', Pr2GripperCommandMsg, queue_size=1, tcp_nodelay=True)
+        self.sub_gripper_state   = rospy.Subscriber(f'{topic}/state', JointControllerStateMsg, callback=self._cb_gripper_feedback, queue_size=1)
+
+    def _cb_gripper_feedback(self, feedback_msg):
+        if self._last_error is not None:
+            delta = (feedback_msg.error - self._last_error) / (feedback_msg.header.stamp - self._last_error_stamp).to_sec()
+            with self._error_lock:
+                self._error_deltas.append(delta)
+                if len(self._error_deltas) > 10:
+                    self._error_deltas = self._error_deltas[-10:]
+        self._last_error_stamp = feedback_msg.header.stamp
+        self._last_error = feedback_msg.error
+
+    def wait(self):
+        while True:
+            if len(self._error_deltas) == 10:
+                with self._error_lock:
+                    if abs(sum(self._error_deltas)) / 10 <= 0.005:
+                        break
+                rospy.sleep(0.1)
+
+    def set_gripper_position(self, position, effort=50):
+        cmd = Pr2GripperCommandMsg()
+        cmd.position = position
+        cmd.max_effort = effort
+        self.pub_gripper_command.publish(cmd)
+
+    def sync_set_gripper_position(self, position, effort=50):
+        self.set_gripper_position(position, effort)
+        rospy.sleep(0.1)
+        self.wait()
+        
+
 
 if __name__ == '__main__':
     rospy.init_node('pr2_opening')
@@ -77,9 +123,9 @@ if __name__ == '__main__':
     eef_path = Path(f'pr2/links/{eef_link}')
     cam_path = Path('pr2/links/head_mount_link')
 
-    resting_pose = {'l_elbow_flex_joint' : -2.1213,
-                    'l_shoulder_lift_joint': 1.2963,
-                    'l_wrist_flex_joint' : -1.16,
+    resting_pose = {#'l_elbow_flex_joint' : -2.1213,
+                    #'l_shoulder_lift_joint': 1.2963,
+                    #'l_wrist_flex_joint' : -1.16,
                     'r_shoulder_pan_joint': -1.0,
                     'r_shoulder_lift_joint': 0.9,
                     'r_upper_arm_roll_joint': -1.2,
@@ -87,12 +133,13 @@ if __name__ == '__main__':
                     'r_wrist_flex_joint' : -1.05,
                     'r_forearm_roll_joint': 3.14,
                     'r_wrist_roll_joint': 0,
-                    'torso_lift_joint'   : 0.16825}
+                    #'torso_lift_joint'   : 0.16825
+                    }
     resting_pose = {gm.Position(Path(f'pr2/{n}')): v for n, v in resting_pose.items()}
 
     # Object stuff
     grasp_poses = {}
-    for p, pose_params in body_paths:
+    for p, pose_params in body_paths.items():
         if not km.has_data(p):
             print(f'Link {p} is not part of articulation model')
             exit(1)
@@ -107,7 +154,10 @@ if __name__ == '__main__':
             print(f'Grasp pose of {p} has {len(pose_params)} parameters but only 6 or 7 are permissable.')
             exit(1)
 
+    gripper = PR2GripperWrapper('/r_gripper_controller')
+
     behavior = ROSOpeningBehavior(km,
+                                  gripper,
                                   Path('pr2'),
                                   eef_path,
                                   grasp_poses,

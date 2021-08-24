@@ -47,7 +47,7 @@
     <parent link="body" />
     <child link="door" />
     <axis xyz="0 0 1" />
-    <limit effort="60" lower="0.0" upper="1.57" velocity="0.05" />
+    <limit effort="60" lower="0.0" upper="1.57" velocity="1" />
   </joint>
 
   <link name="handle">

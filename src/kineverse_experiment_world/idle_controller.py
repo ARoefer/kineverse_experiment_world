@@ -1,8 +1,10 @@
 import kineverse.gradients.gradient_math as gm
+import math
 
 from kineverse.time_wrapper import Time
 
 from kineverse.motion.min_qp_builder import TypedQPBuilder as TQPB,        \
+                                            SoftConstraint as SC,          \
                                             generate_controlled_values,    \
                                             depth_weight_controlled_values
 
@@ -15,6 +17,7 @@ class IdleController(object):
 
         # tucking_constraints.update(self.taxi_constraints)
 
+        self.use_camera = camera_path is not None
         if camera_path is not None:
             self._poi_pos = gm.Symbol('poi')
             poi = gm.point3(1.5, 0.5, 0.0) + gm.vector3(0, self._poi_pos * 2.0, 0)
@@ -36,11 +39,18 @@ class IdleController(object):
         controlled_values, hard_constraints = generate_controlled_values(hard_constraints, controlled_symbols)
         controlled_values = depth_weight_controlled_values(km, controlled_values)
 
-        self.qpb = TQPB(hard_constraints, tucking_constraints, controlled_values)
+        self.qp = TQPB(hard_constraints, tucking_constraints, controlled_values)
         self._start = Time.now()
 
     def get_cmd(self, state, deltaT):
         _state = state.copy()
-        _state[self._poi_pos] = math.sin((Time.now() - self._start).to_sec())
+        if self.use_camera:
+            _state[self._poi_pos] = math.sin((Time.now() - self._start).to_sec())
 
-        return self.qpb.get_cmd(_state)
+        return self.qp.get_cmd(_state)
+
+    def current_error(self):
+        return self.qp.latest_error
+
+    def equilibrium_reached(self, low_eq=1e-3, up_eq=-1e-3):
+        return self.qp.equilibrium_reached(low_eq, up_eq)

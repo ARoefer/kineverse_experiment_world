@@ -7,7 +7,7 @@ from kineverse.model.frames         import Frame
 from kineverse.model.paths          import Path, CPath
 from kineverse.model.geometry_model import ArticulatedObject, \
                                            Box, Mesh, Cylinder, Sphere, \
-                                           RigidBody
+                                           RigidBody, Constraint
 from kineverse.operations.basic_operations import CreateValue, \
                                                   ExecFunction
 from kineverse.operations.urdf_operations  import RevoluteJoint
@@ -244,7 +244,11 @@ def create_nobilia_shelf(km, prefix, origin_pose=gm.eye(4), parent_path=Path('wo
                                                                      gm.vector3(0, 1, 0),
                                                                      gm.eye(4),
                                                                      0,
-                                                                     2.4))
+                                                                     2.2,
+                                                                     **{f'{opening_position}': Constraint(0 - opening_position,
+                                                                                                          2.2 - opening_position,
+                                                                                                          opening_position),
+                                                                        f'{gm.DiffSymbol(opening_position)}': Constraint(-1, 1, gm.DiffSymbol(opening_position))}))
     m_prefix = prefix + ('markers',)
     km.apply_operation(f'create {prefix}/markers/body',         ExecFunction(m_prefix + ('body',), Frame,
                                                                                                    CPath(l_prefix + ('body', )),

@@ -3,7 +3,7 @@ import kineverse.gradients.gradient_math as gm
 from kineverse.motion.min_qp_builder import TypedQPBuilder as TQPB, \
                                             SoftConstraint as SC, \
                                             generate_controlled_values, \
-                                            depth_weight_controlled_values, \
+                                            depth_weight_controlled_values
 
 
 class SixDPoseController(object):
@@ -14,8 +14,8 @@ class SixDPoseController(object):
                        weight_override=None):
         
         eef = actuated_pose
-        goal_pos_error = gm.norm(gm.pos_of(eef.pose) - gm.pos_of(goal_pose))
-        goal_rot_error = gm.norm(eef.pose[:3, :3] - goal_pose[:3, :3])
+        goal_pos_error = gm.norm(gm.pos_of(eef) - gm.pos_of(goal_pose))
+        goal_rot_error = gm.norm(eef[:3, :3] - goal_pose[:3, :3])
 
         goal_constraints = {'align position': SC(-goal_pos_error,
                                                  -goal_pos_error, 10, goal_pos_error),

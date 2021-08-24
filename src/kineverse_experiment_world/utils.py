@@ -76,6 +76,12 @@ def np_random_quat_normal(n_rots, mean, std):
 def np_random_normal_offset(n_points, mean, std):
     return np_sphere_sampling(n_points) * np.random.normal(mean, std, (n_points, 1))
 
+def np_inverse_frame(frame):
+    inv = np.eye(4)
+    inv[:3, :3] = frame[:3, :3].T
+    inv[:3, 3] = np.dot(-inv[:3, :3], frame[:3, 3])
+    return inv
+
 def random_normal_offset(n_points, mean, std):
     return [np_vector3(*row) for row in np_random_normal_offset(n_points, mean, std)]
 
