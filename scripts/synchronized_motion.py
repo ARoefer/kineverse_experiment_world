@@ -94,8 +94,8 @@ if __name__ == '__main__':
     dyn_goal_pos_error = gm.norm(gm.pos_of(eef.pose) - gm.pos_of(goal_pose))
     dyn_goal_rot_error = gm.norm(eef.pose[:3, :3] - goal_pose[:3, :3])
 
-    lead_goal_constraints = {'open_object': SC(2.0 - nobilia.joints['hinge'].position,
-                                               2.0 - nobilia.joints['hinge'].position, 1, nobilia.joints['hinge'].position)}
+    lead_goal_constraints = {'open_object': SC(1.84 - nobilia.joints['hinge'].position,
+                                               1.84 - nobilia.joints['hinge'].position, 1, nobilia.joints['hinge'].position)}
 
     follower_goal_constraints = {'keep position': SC(-dyn_goal_pos_error,
                                                      -dyn_goal_pos_error, 10, dyn_goal_pos_error),
