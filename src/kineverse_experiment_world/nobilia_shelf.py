@@ -13,7 +13,7 @@ from kineverse.operations.basic_operations import CreateValue, \
 from kineverse.operations.urdf_operations  import RevoluteJoint
 
 
-NobiliaDebug = namedtuple('NobiliaDebug', ['poses', 'vectors', 'expressions'])
+NobiliaDebug = namedtuple('NobiliaDebug', ['poses', 'vectors', 'expressions', 'tuning_params'])
 
 class MarkedArticulatedObject(ArticulatedObject):
     def __init__(self, name):
@@ -166,10 +166,11 @@ def create_nobilia_shelf(km, prefix, origin_pose=gm.eye(4), parent_path=Path('wo
 
     # Point a in body reference frame
     point_a  = gm.dot(gm.diag(1, 0, 1, 1), gm.pos_of(top_hinge_in_body))
-    point_d  = gm.point3(-shelf_body_depth * 0.5 + 0.045, 0, shelf_height * 0.5 - 0.182)
+    point_d  = gm.point3(-shelf_body_depth * 0.5 + 0.09, 0, shelf_height * 0.5 - 0.192)
+    # point_d  = gm.point3(-shelf_body_depth * 0.5 + gm.Symbol('point_d_x'), 0, shelf_height * 0.5 - gm.Symbol('point_d_z'))
     # Zero alpha along the vertical axis
     vec_a_to_d = gm.dot(point_d - point_a)
-    alpha      = math.atan2(vec_a_to_d[0], -vec_a_to_d[2]) + opening_position
+    alpha      = gm.atan2(vec_a_to_d[0], -vec_a_to_d[2]) + opening_position
 
     top_panel_in_body   = gm.dot(top_hinge_in_body,  # Translation hinge to body frame
                                  gm.rotation3_axis_angle(gm.vector3(0, 1, 0), -opening_position + 0.5 * math.pi), # Hinge around y
@@ -184,7 +185,9 @@ def create_nobilia_shelf(km, prefix, origin_pose=gm.eye(4), parent_path=Path('wo
     # Hinge lift arm in body reference frame
     point_c_in_bottom_panel = gm.dot(gm.diag(1, 0, 1, 1), 
                                      bottom_panel_marker_in_bottom_panel,
-                                     gm.point3(-0.095, -0.034, -0.072))
+                                     gm.point3(-0.094, -0.034, -0.072),
+                                     # gm.point3(-gm.Symbol('point_c_x'), -0.034, -gm.Symbol('point_c_z'))
+                                     )
     point_c_in_front_hinge  = gm.dot(gm.diag(1, 0, 1, 1), 
                                      gm.dot(bottom_panel_in_front_hinge, 
                                             point_c_in_bottom_panel))
@@ -194,15 +197,16 @@ def create_nobilia_shelf(km, prefix, origin_pose=gm.eye(4), parent_path=Path('wo
     vec_a_to_b = point_b - point_a
     length_t = gm.norm(vec_a_to_b)
     length_b = gm.norm(point_c_in_front_hinge[:3])
-    length_l = 0.38
+    # length_l = gm.Symbol('length_l') # 0.34
+    length_l = 0.372
 
     vec_b_to_d = point_d - point_b
     length_v = gm.norm(vec_b_to_d)
     gamma_1  = inner_triangle_angle(length_t, length_v, length_z)
     gamma_2  = inner_triangle_angle(length_b, length_v, length_l)
 
-    top_panel_offset_angle = math.atan2(point_b_in_top_hinge[2], point_b_in_top_hinge[0]) 
-    bottom_offset_angle    = math.atan2(point_c_in_front_hinge[2], point_c_in_front_hinge[0]) 
+    top_panel_offset_angle = gm.atan2(point_b_in_top_hinge[2], point_b_in_top_hinge[0]) 
+    bottom_offset_angle    = gm.atan2(point_c_in_front_hinge[2], point_c_in_front_hinge[0]) 
 
     gamma = gamma_1 + gamma_2
 
@@ -244,9 +248,9 @@ def create_nobilia_shelf(km, prefix, origin_pose=gm.eye(4), parent_path=Path('wo
                                                                      gm.vector3(0, 1, 0),
                                                                      gm.eye(4),
                                                                      0,
-                                                                     2.2,
+                                                                     1.84,
                                                                      **{f'{opening_position}': Constraint(0 - opening_position,
-                                                                                                          2.2 - opening_position,
+                                                                                                          1.84 - opening_position,
                                                                                                           opening_position),
                                                                         f'{gm.DiffSymbol(opening_position)}': Constraint(-1, 1, gm.DiffSymbol(opening_position))}))
     m_prefix = prefix + ('markers',)
@@ -286,4 +290,8 @@ def create_nobilia_shelf(km, prefix, origin_pose=gm.eye(4), parent_path=Path('wo
                          'position': opening_position,
                          'alpha': alpha,
                          'dist c d': gm.norm(point_d - point_c)
-                         })
+                         }, {gm.Symbol('point_c_x'): 0.094,
+                             gm.Symbol('point_c_z'): 0.072,
+                             gm.Symbol('point_d_x'): 0.09,
+                             gm.Symbol('point_d_z'): 0.192,
+                             gm.Symbol('length_l'): 0.372})
