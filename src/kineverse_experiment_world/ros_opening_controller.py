@@ -60,9 +60,6 @@ class ROSOpeningBehavior(object):
 
         self._phase = 'homing'
 
-        self._gripper_pos = None
-        self._gripper_done_or_stalled = False
-
         self._state_lock = RLock()
         self._state = {}
         self._target_map = {}
