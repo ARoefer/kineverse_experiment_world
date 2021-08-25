@@ -19,6 +19,7 @@ from kineverse_experiment_world.idle_controller import IdleController
 
 class ROSPushingBehavior(object):
     def __init__(self, km, 
+                       gripper_wrapper,
                        robot_prefix,
                        eef_path, ext_paths, 
                        controlled_symbols, control_alias, cam_path=None,
@@ -26,6 +27,7 @@ class ROSPushingBehavior(object):
                        navigation_method='linear', visualizer=None):
         self.km = km
         self.robot_prefix = robot_prefix
+        self.gripper_wrapper = gripper_wrapper
         self.eef_path = eef_path
         self.cam_path = cam_path
 
@@ -36,6 +38,8 @@ class ROSPushingBehavior(object):
         self.navigation_method  = navigation_method
 
         self.controller = None
+
+        self._phase = 'homing'
 
         self._state_lock = RLock()
         self._state = {}
@@ -87,7 +91,36 @@ class ROSPushingBehavior(object):
 
 
     def behavior_update(self):
-        if self._current_target is None:
+        if self.controller is not None:
+            now = rospy.Time.now()
+            with self._state_lock:
+                deltaT = 0.05 if self._last_controller_update is None else (now - self._last_controller_update).to_sec()
+                try:
+                    command = self.controller.get_cmd(self._state, deltaT=deltaT)
+                except Exception as e:
+                    print(traceback.format_exc())
+                    rospy.signal_shutdown('die lol')
+
+            self._robot_cmd_msg.header.stamp = now
+            self._robot_cmd_msg.name, self._robot_cmd_msg.velocity = zip(*[(self.control_alias[s], v) for s, v in command.items() 
+                                                                                                       if s in self.control_alias])
+            self.pub_robot_command.publish(self._robot_cmd_msg)
+            self._last_controller_update = now
+
+        # Lets not confuse the tracker
+        if self._phase != 'pushing' and self._last_external_cmd_msg is not None: 
+            # Ensure that velocities are assumed to be 0 when not operating anything
+            self._last_external_cmd_msg.value = [0]*len(self._last_external_cmd_msg.value)
+            self.pub_external_command.publish(self._last_external_cmd_msg)
+            self._last_external_cmd_msg = None
+
+
+        if self._phase == 'idle':
+            # Monitor state of scene. Wait for open thing 
+            # -> pushing
+            if self.controller is None: # Create an idle controller if none exists
+                self.controller = self._idle_controller
+
             with self._state_lock:
                 for s, p in self._target_map.items():
                     if s in self._state and self._state[s] > 2e-2: # Some thing in the scene is open
@@ -102,46 +135,41 @@ class ROSPushingBehavior(object):
                                                             self.visualizer,
                                                             self.weights)
                         print(f'New target is {self._current_target}')
+                        self._phase = 'pushing'
+                        print(f'Now entering {self._phase} state')
                         break
-                else: # Nothing to be done
-                    if self.controller is None: # Create an idle controller if none exists
-                        self.controller = self._idle_controller
-        else:
-            # Reset target to None if goal is satisfied
-            with self._state_lock:
-                current_external_error = {s: self._state[s] for s in self._target_body_map[self._current_target]}
-            print('Current error state:\n  {}'.format('\n  '.join([f'{s}: {v}' for s, v in current_external_error.items()])))
-            if min([v <= 2e-2 for v in current_external_error.values()]):
-                print('Target fulfilled. Setting it to None')
-                self._current_target = None
-                self.controller = None
-                return
-
-        if self.controller is None:
-            return
-
-        now = rospy.Time.now()
-        with self._state_lock:
-            deltaT  = 0.05 if self._last_controller_update is None else (now - self._last_controller_update).to_sec()
-            command = self.controller.get_cmd(self._state, deltaT=deltaT)
-
-        self._robot_cmd_msg.header.stamp = now
-        self._robot_cmd_msg.name, self._robot_cmd_msg.velocity = zip(*[(self.control_alias[s], v) for s, v in command.items() 
-                                                                                                   if s in self.control_alias])
-        self.pub_robot_command.publish(self._robot_cmd_msg)
-
-        if self._current_target is not None: # Implies there is some external command
+        elif self._phase == 'pushing':
+            # Push object until it is closed
+            # -> homing
             external_command = {s: v for s, v in command.items() if s not in self.controlled_symbols}
             ext_msg = ValueMapMsg()
             ext_msg.header.stamp = now
             ext_msg.symbol, ext_msg.value = zip(*[(str(s), v) for s, v in external_command.items()])
             self.pub_external_command.publish(ext_msg)
             self._last_external_cmd_msg = ext_msg
-        elif self._last_external_cmd_msg is not None: 
-            # Ensure that velocities are assumed to be 0 when not operating anything
-            self._last_external_cmd_msg.value = [0]*len(self._last_external_cmd_msg.value)
-            self.pub_external_command.publish(self._last_external_cmd_msg)
-            self._last_external_cmd_msg = None
+
+            with self._state_lock:
+                current_external_error = {s: self._state[s] for s in self._target_body_map[self._current_target]}
+            print('Current error state:\n  {}'.format('\n  '.join([f'{s}: {v}' for s, v in current_external_error.items()])))
+            if min([v <= 2e-2 for v in current_external_error.values()]):
+                print('Target fulfilled. Setting it to None')
+                self._current_target = None
+                self.controller = self._idle_controller
+                self._phase = 'homing'
+                print(f'Now entering {self._phase} state')
+        elif self._phase == 'homing':
+            # Wait for robot to return to home pose
+            # -> idle
+            if self.controller is None:
+                self.gripper_wrapper.sync_set_gripper_position(0.00)
+                self.controller = self._idle_controller
+                return
+
+            if self.controller.equilibrium_reached(0.1, -0.1):
+                self._phase = 'idle'
+                print(f'Now entering {self._phase} state')
+        else:
+            raise Exception(f'Unknown state "{self._phase}')
 
 
     def cb_robot_js(self, js_msg):
