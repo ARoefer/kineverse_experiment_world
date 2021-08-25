@@ -102,6 +102,8 @@ class CascadingQP(object):
     def get_cmd(self, state, deltaT=0.02, max_follower_iter=20):
         local_state = state.copy()
         lead_cmd = self.lead_qp.get_cmd(local_state, deltaT=deltaT)
+        if deltaT >= 0.5:
+            raise Exception(f'DeltaT is {deltaT}: Wtf are you doing?')
         local_state[self.sym_dt] = deltaT
 
         print('Lead cmd:\n  {}'.format('\n  '.join(f'{s}: {v}' for s, v in lead_cmd.items())))
@@ -111,6 +113,8 @@ class CascadingQP(object):
                                                                    for s in self.lead_o_controls])):
             local_state[s] = v
 
+        local_state.update({s: 0 for s in lead_cmd.keys()})
+        local_state[self.sym_dt] = 0.5
         ref_state = {s: local_state[s] for s in self.follower_delta_map.keys()}
         # Simple solution, no convergence
         for x in range(max_follower_iter):

@@ -53,6 +53,10 @@ class PR2GripperWrapper(GripperWrapper):
                         break
                 rospy.sleep(0.1)
 
+    def get_latest_error(self):
+        with self._error_lock:
+            return self._last_error
+
     def set_gripper_position(self, position, effort=50):
         cmd = Pr2GripperCommandMsg()
         cmd.position = position
@@ -131,9 +135,9 @@ if __name__ == '__main__':
                     'r_upper_arm_roll_joint': -1.2,
                     'r_elbow_flex_joint' : -2.1213,
                     'r_wrist_flex_joint' : -1.05,
-                    'r_forearm_roll_joint': 3.14,
+                    'r_forearm_roll_joint': 0,
                     'r_wrist_roll_joint': 0,
-                    #'torso_lift_joint'   : 0.16825
+                    # 'torso_lift_joint'   : 0.16825
                     }
     resting_pose = {gm.Position(Path(f'pr2/{n}')): v for n, v in resting_pose.items()}
 
@@ -154,6 +158,8 @@ if __name__ == '__main__':
             print(f'Grasp pose of {p} has {len(pose_params)} parameters but only 6 or 7 are permissable.')
             exit(1)
 
+    monitoring_threshold = rospy.get_param('~m_threshold', 0.7)
+
     gripper = PR2GripperWrapper('/r_gripper_controller')
 
     behavior = ROSOpeningBehavior(km,
@@ -165,7 +171,10 @@ if __name__ == '__main__':
                                   {s: str(Path(gm.erase_type(s))[-1]) for s in robot_controlled_symbols},
                                   cam_path,
                                   resting_pose=resting_pose,
-                                  visualizer=visualizer)
+                                  visualizer=visualizer,
+                                  monitoring_threshold=monitoring_threshold,
+                                  acceptance_threshold=min(monitoring_threshold + 0.1, 1),
+                                  control_mode='vel')
 
     while not rospy.is_shutdown():
         rospy.sleep(0.3)

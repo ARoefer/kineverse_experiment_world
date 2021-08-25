@@ -1,10 +1,12 @@
 <launch>
 	<arg name="object" default="nobilia"/>
 	<arg name="tracking_samples" default="4"/>
+	<arg name="control" default="vel"/>
 
 	<include file="$(find kineverse_experiment_world)/launch/pr2_nobilia_estimation.launch"      pass_all_args="true" if="$(eval arg('object') == 'nobilia')"/>
 	<include file="$(find kineverse_experiment_world)/launch/pr2_shelf_door_estimation.launch"   pass_all_args="true" if="$(eval arg('object') == 'shelf_door')"/>
 	<include file="$(find kineverse_experiment_world)/launch/pr2_shelf_drawer_estimation.launch" pass_all_args="true" if="$(eval arg('object') == 'shelf_drawer')"/>
 
-	<include file="$(find kineverse_experiment_world)/launch/pr2_vel_control.launch"/>
+	<include file="$(find kineverse_experiment_world)/launch/pr2_vel_control.launch" if="$(eval arg('control') == 'vel')"/>
+	<include file="$(find kineverse_experiment_world)/launch/pr2_pos_control.launch" if="$(eval arg('control') == 'pos')"/>
 </launch>
