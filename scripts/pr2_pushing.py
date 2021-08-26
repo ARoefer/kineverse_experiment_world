@@ -19,6 +19,7 @@ from kineverse_experiment_world.nobilia_shelf import create_nobilia_shelf
 from kineverse_experiment_world.utils import insert_omni_base, load_localized_model
 
 from kineverse_experiment_world.ros_pushing_controller import ROSPushingBehavior
+from kineverse_experiment_world.pr2_things             import PR2GripperWrapper
 
 if __name__ == '__main__':
     rospy.init_node('pr2_pushing')
@@ -76,9 +77,10 @@ if __name__ == '__main__':
     eef_path = Path(f'pr2/links/{eef_link}')
     cam_path = Path('pr2/links/head_mount_link')
 
-    resting_pose = {'l_elbow_flex_joint' : -2.1213,
-                    'l_shoulder_lift_joint': 1.2963,
-                    'l_wrist_flex_joint' : -1.16,
+    resting_pose = {
+                    # 'l_elbow_flex_joint' : -2.1213,
+                    # 'l_shoulder_lift_joint': 1.2963,
+                    # 'l_wrist_flex_joint' : -1.16,
                     'r_shoulder_pan_joint': -1.0,
                     'r_shoulder_lift_joint': 0.9,
                     'r_upper_arm_roll_joint': -1.2,
@@ -86,12 +88,16 @@ if __name__ == '__main__':
                     'r_wrist_flex_joint' : -1.05,
                     'r_forearm_roll_joint': 3.14,
                     'r_wrist_roll_joint': 0,
-                    'torso_lift_joint'   : 0.16825}
+                    #'torso_lift_joint'   : 0.16825
+                    }
     resting_pose = {gm.Position(Path(f'pr2/{n}')): v for n, v in resting_pose.items()}
 
     nav_method = rospy.get_param('~nav_method', 'proj')
 
+    gripper = PR2GripperWrapper('/r_gripper_controller')
+
     behavior = ROSPushingBehavior(km,
+                                  gripper,
                                   Path('pr2'),
                                   eef_path,
                                   [Path(p) for p in body_paths],
@@ -101,6 +107,8 @@ if __name__ == '__main__':
                                   resting_pose=resting_pose,
                                   visualizer=visualizer,
                                   navigation_method=nav_method)
+
+    gripper.sync_set_gripper_position(-0.02)
 
     while not rospy.is_shutdown():
         rospy.sleep(0.3)
