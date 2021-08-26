@@ -39,6 +39,13 @@ if __name__ == '__main__':
     km.clean_structure()    
     km.dispatch_events()
 
+    print('\n'.join(km.timeline_tags.keys()))
+
+    if rospy.get_param('~use_base', False):
+        insert_omni_base(km, Path('pr2'), pr2_urdf.get_root(), 'world')
+        km.clean_structure()
+        km.dispatch_events()
+
     pr2     = km.get_data('pr2')
     nobilia = km.get_data('nobilia')
 
