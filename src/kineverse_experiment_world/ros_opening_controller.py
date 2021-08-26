@@ -38,23 +38,24 @@ def gen_dv_cvs(km, constraints, controlled_symbols):
 
 class ROSOpeningBehavior(object):
     def __init__(self, km, 
+                       robot_command_processor,
                        gripper_wrapper,
                        robot_prefix,
                        eef_path, ext_paths_and_poses, 
-                       controlled_symbols, control_alias, cam_path=None,
+                       controlled_symbols, cam_path=None,
                        weights=None, resting_pose=None, visualizer=None, 
                        monitoring_threshold=0.7, acceptance_threshold=0.8,
                        control_mode='vel'):
         self.km = km
+        self.robot_command_processor = robot_command_processor
         self.gripper_wrapper = gripper_wrapper
-        self.control_mode = control_mode
-        self.robot_prefix = robot_prefix
-        self.eef_path = eef_path
-        self.cam_path = cam_path
+        self.control_mode    = control_mode
+        self.robot_prefix    = robot_prefix
+        self.eef_path        = eef_path
+        self.cam_path        = cam_path
 
-        self.visualizer    = visualizer
-        self.weights       = weights
-        self.control_alias = control_alias
+        self.visualizer         = visualizer
+        self.weights            = weights
         self.controlled_symbols = controlled_symbols
 
         self.controller = None
@@ -72,8 +73,6 @@ class ROSOpeningBehavior(object):
         self._last_controller_update = None
 
         self._current_target = None
-        self._robot_cmd_msg  = JointStateMsg()
-        self._robot_cmd_msg.name = list(control_alias.keys())
         self._last_external_cmd_msg = None
 
         self._idle_controller = IdleController(km, 
@@ -85,11 +84,10 @@ class ROSOpeningBehavior(object):
 
         self._world = km.get_active_geometry(gm.free_symbols(km.get_data(self.eef_path).pose).union(self._target_map.keys()))
 
-        self.pub_robot_command    = rospy.Publisher('~robot_command', JointStateMsg, queue_size=1, tcp_nodelay=True)
         self.pub_external_command = rospy.Publisher('~external_command', ValueMapMsg, queue_size=1, tcp_nodelay=True)
-
-        self.sub_robot_js    = rospy.Subscriber('/joint_states',  JointStateMsg, callback=self.cb_robot_js, queue_size=1)
+        
         self.sub_external_js = rospy.Subscriber('~external_js',   ValueMapMsg, callback=self.cb_external_js, queue_size=1)
+        self.robot_command_processor.register_state_cb(self.cb_robot_js)
 
         self._kys = False
         self._behavior_thread = threading.Thread(target=self.behavior_update)
@@ -162,16 +160,7 @@ class ROSOpeningBehavior(object):
                         print(traceback.format_exc())
                         rospy.signal_shutdown('die lol')
 
-                self._robot_cmd_msg.header.stamp = now
-                if self.control_mode == 'vel':
-                    self._robot_cmd_msg.name, self._robot_cmd_msg.velocity = zip(*[(self.control_alias[s], v) for s, v in command.items() 
-                                                                                                               if s in self.control_alias])
-                elif self.control_mode == 'pos':
-                    with self._state_lock:
-                        self._robot_cmd_msg.name, self._robot_cmd_msg.position = zip(*[(self.control_alias[s], self._state[gm.IntSymbol(s)] + v * 0.1) for s, v in command.items() 
-                                                                                                                                                       if s in self.control_alias])
-
-                self.pub_robot_command.publish(self._robot_cmd_msg)
+                self.robot_command_processor.send_command(command)
                 self._last_controller_update = now
 
             # Lets not confuse the tracker
@@ -364,14 +353,7 @@ class ROSOpeningBehavior(object):
                 raise Exception(f'Unknown state "{self._phase}')
 
 
-    def cb_robot_js(self, js_msg):
-        state_update = {}
-        for x, name in enumerate(js_msg.name):
-            if len(js_msg.position) > x:
-                state_update[gm.Position(self.robot_prefix + (name,))] = js_msg.position[x]
-            if len(js_msg.velocity) > x:
-                state_update[gm.Velocity(self.robot_prefix + (name,))] = js_msg.velocity[x]
-
+    def cb_robot_js(self, state_update):
         with self._state_lock:
             self._state.update(state_update)
             self._robot_state_update_count += 1

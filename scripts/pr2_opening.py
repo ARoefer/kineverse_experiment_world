@@ -56,8 +56,8 @@ if __name__ == '__main__':
     km.clean_structure()
 
     if use_base:
-        insert_omni_base(km, Path('pr2'), urdf_model.get_root(), 'world')
-        reference_frame = 'world'
+        insert_omni_base(km, Path('pr2'), urdf_model.get_root(), 'odom')
+        reference_frame = 'odom'
     else:
         reference_frame = urdf_model.get_root()
 
@@ -74,9 +74,14 @@ if __name__ == '__main__':
     joint_symbols = [j.position for j in km.get_data(f'pr2/joints').values() 
                                 if hasattr(j, 'position') and gm.is_symbol(j.position)]
     robot_controlled_symbols = {gm.DiffSymbol(j) for j in joint_symbols if 'torso' not in str(j)}
+    base_symbols = None
     if use_base:
-        base_joint = km.get_data(base_joint_path)
-        robot_controlled_symbols |= {gm.get_diff(x) for x in [base_joint.x_pos, base_joint.y_pos, base_joint.a_pos]}
+        base_joint   = km.get_data(base_joint_path)
+        base_symbols = BaseSymbols(base_joint.x_pos, base_joint.y_pos, base_joint.a_pos,
+                                   gm.DiffSymbol(base_joint.x_pos),
+                                   gm.DiffSymbol(base_joint.y_pos),
+                                   gm.DiffSymbol(base_joint.a_pos))
+        robot_controlled_symbols |= {gm.DiffSymbol(x) for x in [base_joint.x_pos, base_joint.y_pos, base_joint.a_pos]}
 
     eef_path = Path(f'pr2/links/{eef_link}')
     cam_path = Path('pr2/links/head_mount_link')
@@ -114,15 +119,20 @@ if __name__ == '__main__':
 
     monitoring_threshold = rospy.get_param('~m_threshold', 0.7)
 
+    pr2_commander = PR2VelCommandProcessor('/pr2_vel_controller/command',
+                                           robot_controlled_symbols,
+                                           '/base_command',
+                                           base_symbols)
+
     gripper = PR2GripperWrapper('/r_gripper_controller')
 
     behavior = ROSOpeningBehavior(km,
+                                  pr2_commander,
                                   gripper,
                                   Path('pr2'),
                                   eef_path,
                                   grasp_poses,
                                   robot_controlled_symbols,
-                                  {s: str(Path(gm.erase_type(s))[-1]) for s in robot_controlled_symbols},
                                   cam_path,
                                   resting_pose=resting_pose,
                                   visualizer=visualizer,
