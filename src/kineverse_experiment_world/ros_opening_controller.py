@@ -28,9 +28,6 @@ from kineverse_experiment_world.idle_controller      import IdleController
 from kineverse_experiment_world.sixd_pose_controller import SixDPoseController
 from kineverse_experiment_world.utils                import np_inverse_frame
 
-class GripperWrapper(object):
-    def sync_set_gripper_position(self, position, effort=50):
-        raise NotImplementedError
 
 def gen_dv_cvs(km, constraints, controlled_symbols):
     cvs, constraints = generate_controlled_values(constraints, controlled_symbols)
@@ -231,7 +228,7 @@ class ROSOpeningBehavior(object):
                         print(f'Now entering {self._phase} state')
                     else:
                         print('Closing gripper...')
-                        self.gripper_wrapper.sync_set_gripper_position(0)
+                        self.gripper_wrapper.sync_set_gripper_position(0, 80)
                         print('Generating opening controller')
                         
                         eef = self.km.get_data(self.eef_path)
@@ -348,7 +345,7 @@ class ROSOpeningBehavior(object):
                 # Wait for retraction to complete (Currently just skipping)
                 # -> spawn idle controller
                 #    switch to "homing"
-                if True: # self.controller.equilibrium_reached(0.02, -0.02):
+                if self.controller.equilibrium_reached(0.035, -0.035):
                     self.controller = self._idle_controller
                     self._phase = 'homing'
                     print(f'Now entering {self._phase} state')

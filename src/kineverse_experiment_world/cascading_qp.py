@@ -115,10 +115,11 @@ class CascadingQP(object):
 
 
     def get_cmd(self, state, deltaT=0.02, max_follower_iter=20):
-        local_state = state.copy()
+        local_state = {s: v for s, v in state.items()}
         lead_cmd = self.lead_qp.get_cmd(local_state, deltaT=deltaT)
         if deltaT >= 0.5:
             raise Exception(f'DeltaT is {deltaT}: Wtf are you doing?')
+
         local_state[self.sym_dt] = deltaT
 
         # print('Lead cmd:\n  {}'.format('\n  '.join(f'{s}: {v}' for s, v in lead_cmd.items())))
@@ -127,6 +128,8 @@ class CascadingQP(object):
                         self.lead_t_function.call2([local_state[s] if s not in lead_cmd else lead_cmd[s] 
                                                                    for s in self.lead_o_controls])):
             local_state[s] = v
+
+        print('Lead state for next time state:\n  {}'.format('\n  '.join(f'{s}: {local_state[s]}' for s in self.lead_o_symbols)))
 
         local_state.update({s: 0 for s in lead_cmd.keys()})
         local_state[self.sym_dt] = 0.5
@@ -155,6 +158,7 @@ class CascadingQP(object):
 
         lead_cmd.update(follower_cmd)
         return {s: v * scale for s, v in lead_cmd.items()}
+
 
     def equilibrium_reached(self, low_eq=1e-3, up_eq=-1e-3):
         return self.lead_qp.equilibrium_reached(low_eq, up_eq)

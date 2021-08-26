@@ -226,7 +226,7 @@ def create_nobilia_shelf(km, prefix, origin_pose=gm.eye(4), parent_path=Path('wo
                                                            geometry={0: geom_panel_bottom},
                                                            collision={0: geom_panel_bottom})
 
-    handle_transform = gm.dot(gm.translation3(geom_panel_bottom.scale[0] * 0.5 - 0.05, 0, 0.5 * wall_width),
+    handle_transform = gm.dot(gm.translation3(geom_panel_bottom.scale[0] * 0.5 - 0.08, 0, 0.5 * wall_width),
                               gm.rotation3_axis_angle(gm.vector3(0, 1, 0), -math.pi * 0.5))
     rb_handle       = RigidBody(l_prefix + ('panel_bottom',), gm.dot(rb_panel_bottom.pose, handle_transform),
                                                               handle_transform,
@@ -252,7 +252,7 @@ def create_nobilia_shelf(km, prefix, origin_pose=gm.eye(4), parent_path=Path('wo
                                                                      **{f'{opening_position}': Constraint(0 - opening_position,
                                                                                                           1.84 - opening_position,
                                                                                                           opening_position),
-                                                                        f'{gm.DiffSymbol(opening_position)}': Constraint(-1, 1, gm.DiffSymbol(opening_position))}))
+                                                                        f'{gm.DiffSymbol(opening_position)}': Constraint(-0.25, 0.25, gm.DiffSymbol(opening_position))}))
     m_prefix = prefix + ('markers',)
     km.apply_operation(f'create {prefix}/markers/body',         ExecFunction(m_prefix + ('body',), Frame,
                                                                                                    CPath(l_prefix + ('body', )),
