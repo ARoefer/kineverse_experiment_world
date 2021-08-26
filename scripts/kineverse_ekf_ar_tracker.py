@@ -11,21 +11,11 @@ from kineverse.model.geometry_model import GeometryModel, Path, Frame
 from kineverse.ros.tf_publisher     import ModelTFBroadcaster_URDF
 from kineverse.visualization.ros_visualizer import ROSVisualizer
 
-from kineverse_experiment_world.ekf_model import EKFModel
+from kineverse_experiment_world.ekf_model     import EKFModel
 from kineverse_experiment_world.nobilia_shelf import create_nobilia_shelf
-from kineverse_experiment_world.msg import TransformStampedArray as TransformStampedArrayMsg
+from kineverse_experiment_world.msg           import TransformStampedArray as TransformStampedArrayMsg
+from kineverse_experiment_world.utils         import np_frame3_quaternion
 
-def np_frame3_quaternion(x, y, z, qx, qy, qz, qw):
-    a  = [qx, qy, qz, qw]
-    mf = np.array
-    qx2 = qx * qx
-    qy2 = qy * qy
-    qz2 = qz * qz
-    qw2 = qw * qw
-    return mf([[qw2 + qx2 - qy2 - qz2, 2 * qx * qy - 2 * qw * qz, 2 * qx * qz + 2 * qw * qy, x],
-               [2 * qx * qy + 2 * qw * qz, qw2 - qx2 + qy2 - qz2, 2 * qy * qz - 2 * qw * qx, y],
-               [2 * qx * qz - 2 * qw * qy, 2 * qy * qz + 2 * qw * qx, qw2 - qx2 - qy2 + qz2, z],
-               [0, 0, 0, 1]])
 
 def np_6d_pose_feature(x, y, z, qx, qy, qz, qw):
     axis_norm = np.sqrt(qx**2 + qy**2 + qz**2)

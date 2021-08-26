@@ -39,6 +39,17 @@ def np_translation3(x, y, z, w=1):
 def np_vector3(x, y, z):
     return np.array([x, y, z, 0]).reshape((4, 1))
 
+def np_frame3_quaternion(x, y, z, qx, qy, qz, qw):
+    a  = [qx, qy, qz, qw]
+    qx2 = qx * qx
+    qy2 = qy * qy
+    qz2 = qz * qz
+    qw2 = qw * qw
+    return np.array([[qw2 + qx2 - qy2 - qz2, 2 * qx * qy - 2 * qw * qz, 2 * qx * qz + 2 * qw * qy, x],
+                     [2 * qx * qy + 2 * qw * qz, qw2 - qx2 + qy2 - qz2, 2 * qy * qz - 2 * qw * qx, y],
+                     [2 * qx * qz - 2 * qw * qy, 2 * qy * qz + 2 * qw * qx, qw2 - qx2 - qy2 + qz2, z],
+                     [0, 0, 0, 1]])
+
 # Uniform sampling of points on a sphere according to:
 #  https://demonstrations.wolfram.com/RandomPointsOnASphere/
 def np_sphere_sampling(n_points):
