@@ -129,7 +129,7 @@ class CascadingQP(object):
                                                                    for s in self.lead_o_controls])):
             local_state[s] = v
 
-        print('Lead state for next time state:\n  {}'.format('\n  '.join(f'{s}: {local_state[s]}' for s in self.lead_o_symbols)))
+        # print('Lead state for next time state:\n  {}'.format('\n  '.join(f'{s}: {local_state[s]}' for s in self.lead_o_symbols)))
 
         local_state.update({s: 0 for s in lead_cmd.keys()})
         local_state[self.sym_dt] = 0.5
