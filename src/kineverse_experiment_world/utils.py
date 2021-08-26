@@ -2,6 +2,7 @@ import numpy as np
 
 import kineverse.gradients.gradient_math as gm
 from kineverse.gradients.gradient_math import *
+from kineverse.model.frames                  import Frame
 from kineverse.model.paths                   import Path, CPath
 from kineverse.operations.basic_operations   import ExecFunction
 from kineverse.operations.urdf_operations    import load_urdf
@@ -100,6 +101,9 @@ def str2bool(v):
 
 
 def insert_omni_base(km, robot_path, root_link, world_frame='world', lin_vel=1.0, ang_vel=0.6):
+    if not km.has_data(world_frame):
+        km.apply_operation_before(f'create {world_frame}', f'create {robot_path}', ExecFunction(Path('world'), Frame, ''))
+
     base_joint_path = robot_path + Path(f'joints/to_{world_frame}')
     base_op = ExecFunction(base_joint_path,
                            create_omnibase_joint_with_symbols,
@@ -124,6 +128,9 @@ def insert_diff_base(km,
                      wheel_radius=0.06,
                      wheel_distance=0.4,
                      wheel_vel_limit=0.6):
+    if not km.has_data(world_frame):
+        km.apply_operation_before(f'create {world_frame}', f'create {robot_path}', ExecFunction(Path('world'), Frame, ''))
+
     base_joint_path = robot_path + Path(f'joints/to_{world_frame}')
     base_op = ExecFunction(base_joint_path,
                            create_diff_drive_joint_with_symbols,
