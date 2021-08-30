@@ -19,6 +19,7 @@ from kineverse_tools.ik_solver              import ik_solve_one_shot
 
 from kineverse_experiment_world.nobilia_shelf import create_nobilia_shelf
 from kineverse_experiment_world.cascading_qp  import CascadingQP
+from kineverse_experiment_world.utils         import insert_omni_base
 
 
 if __name__ == '__main__':
@@ -66,16 +67,16 @@ if __name__ == '__main__':
     goal_0_pose     = gm.subs(goal_pose, {s: 0 for s in gm.free_symbols(goal_pose)})
 
     start_pose = {'l_elbow_flex_joint' : -2.1213,
-                    'l_shoulder_lift_joint': 1.2963,
-                    'l_wrist_flex_joint' : -1.16,
-                    'r_shoulder_pan_joint': -1.0,
-                    'r_shoulder_lift_joint': 0.9,
-                    'r_upper_arm_roll_joint': -1.2,
-                    'r_elbow_flex_joint' : -2.1213,
-                    'r_wrist_flex_joint' : -1.05,
-                    'r_forearm_roll_joint': 3.14,
-                    'r_wrist_roll_joint': 0,
-                    'torso_lift_joint'   : 0.16825}
+                  'l_shoulder_lift_joint': 1.2963,
+                  'l_wrist_flex_joint' : -1.16,
+                  'r_shoulder_pan_joint': -1.0,
+                  'r_shoulder_lift_joint': 0.9,
+                  'r_upper_arm_roll_joint': -1.2,
+                  'r_elbow_flex_joint' : -2.1213,
+                  'r_wrist_flex_joint' : -1.05,
+                  'r_forearm_roll_joint': 3.14,
+                  'r_wrist_roll_joint': 0,
+                  'torso_lift_joint'   : 0.16825}
     start_pose = {gm.Position(Path(f'pr2/{n}')): v for n, v in start_pose.items()}
     start_state = {s: 0 for s in gm.free_symbols(collision_world)}
     start_state.update(start_pose)
@@ -114,7 +115,7 @@ if __name__ == '__main__':
                          lead_goal_constraints, 
                          follower_goal_constraints, 
                          f_gen_follower_cvs=gen_dv_cvs,
-                         # controls_blacklist=blacklist
+                         controls_blacklist=blacklist
                          )
 
     # exit()
