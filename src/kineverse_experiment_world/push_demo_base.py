@@ -72,7 +72,7 @@ def generate_push_closing(km, grounding_state, controlled_symbols,
         vis.draw_vector('debug_vecs', s_object_cp, gm.subs(neutral_tangent, state), r=1, g=1, b=0)
         if target_pos is not None:
             vis.draw_sphere('debug_vecs', gm.subs(target_pos, state), 0.01, r=0, b=1)
-        print(f'{gm.norm(gm.subs(contact_normal, state))}')
+        # print(f'{gm.norm(gm.subs(contact_normal, state))}')
         # vis.draw_vector('debug_vecs', s_object_cp, s_ortho_vel_vec, r=1, b=0)
         vis.render('debug_vecs')
 
@@ -127,6 +127,12 @@ class PushingController(object):
 
         goal_constraints = {'reach_point': PIDC(geom_distance, geom_distance, 1, k_i=0.00)}
 
+        for s, w in weight_override.items():
+            for cv in controlled_values.values():
+                if cv.symbol is s:
+                    cv.weight_id = w
+                    break
+
         # CAMERA STUFF
         if camera_path is not None:
             camera      = km.get_data(camera_path)
@@ -143,7 +149,7 @@ class PushingController(object):
 
         goal_constraints.update({f'open_object_{x}': PIDC(s, s, 1) for x, s in enumerate(gm.free_symbols(target_object.pose))})
 
-        self.look_goal         = look_goal
+        self.look_goal         = look_goal if camera_path is not None else None
         self.in_contact        = gm.less_than(geom_distance, 0.01)
         self.controlled_values = controlled_values
         self.geom_distance     = geom_distance

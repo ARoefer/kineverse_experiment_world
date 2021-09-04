@@ -45,6 +45,8 @@ from kineverse.visualization.trajectory_visualizer import TrajectoryVisualizer
 from kineverse_experiment_world.push_demo_base     import generate_push_closing, \
                                                           PushingController
 from kineverse_experiment_world.nobilia_shelf      import create_nobilia_shelf
+from kineverse_experiment_world.utils              import insert_omni_base, \
+                                                          insert_diff_base
 
 from trajectory_msgs.msg import JointTrajectory as JointTrajectoryMsg
 
@@ -69,10 +71,10 @@ from urdf_parser_py.urdf import URDF
 
 start_poses = {
   'fetch' : {'wrist_roll_joint'   : 0.0,
-              'shoulder_pan_joint' : 1.0,
+              'shoulder_pan_joint' : 0.3,
               'elbow_flex_joint'   : 1.72,
-              'forearm_roll_joint' : 0.0,
-              'upperarm_roll_joint': -0.2,
+              'forearm_roll_joint' : -0.4,
+              'upperarm_roll_joint': -1.57,
               'wrist_flex_joint'   : 1.66,
               'shoulder_lift_joint': 1.4,
               'torso_lift_joint'   : 0.2},
@@ -161,18 +163,18 @@ if __name__ == '__main__':
     use_geom_circulation = args.nav
     
     if args.link is not None:
-      robot_link = args.link
+        robot_link = args.link
     elif robot == 'pr2':
-      robot_link = 'r_gripper_r_finger_tip_link'
+        robot_link = 'r_gripper_r_finger_tip_link'
     else:
-      robot_link = 'gripper_link' # 'r_gripper_finger_link'
+        robot_link = 'gripper_link' # 'r_gripper_finger_link'
 
     camera_link = args.camera
     if camera_link is None:
-      if args.robot == 'fetch':
-        camera_link = 'head_camera_rgb_optical_frame'
-      elif args.robot == 'pr2':
-        camera_link = 'head_mount_kinect_rgb_optical_frame'
+        if args.robot == 'fetch':
+            camera_link = 'head_camera_rgb_optical_frame'
+        elif args.robot == 'pr2':
+            camera_link = 'head_mount_kinect_rgb_optical_frame'
 
     plot_dir = res_pkg_path('package://kineverse/test/plots')
 
@@ -199,8 +201,8 @@ if __name__ == '__main__':
     km = GeometryModel()
     load_urdf(km, Path(robot), urdf_model)
     load_urdf(km, Path('kitchen'), kitchen_model)
-    create_nobilia_shelf(km, Path('nobilia'), gm.frame3_rpy(0, 0, 1.2, 
-                                                            gm.point3(1.2, 0, 0.8)))
+    # create_nobilia_shelf(km, Path('nobilia'), gm.frame3_rpy(0, 0, 1.2, 
+    #                                                         gm.point3(1.2, 0, 0.8)))
 
     km.clean_structure()
     km.apply_operation_before('create world', 'create {}'.format(robot), ExecFunction(Path('world'), Frame, ''))
@@ -209,28 +211,16 @@ if __name__ == '__main__':
 
     # Insert base to world kinematic
     if use_omni:
-        base_op = ExecFunction(base_joint_path,
-                               create_omnibase_joint_with_symbols,
-                                    CPath('world/pose'),
-                                    CPath('{}/links/{}/pose'.format(robot, urdf_model.get_root())),
-                                    gm.vector3(0,0,1),
-                                    1.0, 0.6, CPath(robot))
+        insert_omni_base(km, 
+                         Path(robot), 
+                         urdf_model.get_root())
     else:
-        base_op = ExecFunction(base_joint_path,
-                               create_diff_drive_joint_with_symbols,
-                                    CPath('world/pose'),
-                                    CPath('{}/links/{}/pose'.format(robot, urdf_model.get_root())),
-                                    0.12 * 0.5,
-                                    0.3748,
-                                    17.4, CPath(robot))
-    km.apply_operation_after(f'create {base_joint_path}',
-                             f'create {robot}/{urdf_model.get_root()}', base_op)
-    km.apply_operation_after(f'connect world {urdf_model.get_root()}',
-                             f'create {base_joint_path}',
-                             CreateAdvancedFrameConnection(base_joint_path,
-                                                           Path('world'),
-                                                           Path('{}/links/{}'.format(robot, urdf_model.get_root()))))
-    km.clean_structure()
+        insert_diff_base(km, 
+                         Path(robot), 
+                         urdf_model.get_root(),
+                         wheel_radius=0.12 * 0.5,
+                         wheel_distance=0.3748,
+                         wheel_vel_limit=17.4)
     km.dispatch_events()
 
     # Visualization of the trajectory
@@ -243,7 +233,10 @@ if __name__ == '__main__':
 
     # GOAL DEFINITION
     eef_path = Path(f'{robot}/links/{robot_link}')
-    cam_path = Path(f'{robot}/links/head_camera_link') if robot != 'pr2' else Path('pr2/links/head_mount_link')
+    if camera_link.lower() != 'none':
+        cam_path = Path(f'{robot}/links/{camera_link}') if robot != 'pr2' else Path('pr2/links/head_mount_link')
+    else:
+        cam_path = None
 
     kitchen_parts = ['iai_fridge_door_handle', #]
                      'fridge_area_lower_drawer_handle',#]
@@ -289,7 +282,7 @@ if __name__ == '__main__':
     n_iter    = []
     total_dur = []
 
-    for part_path in [Path(f'nobilia/links/panel_bottom')]: #[Path(f'kitchen/links/{p}') for p in kitchen_parts]:
+    for part_path in [Path(f'kitchen/links/{p}') for p in kitchen_parts]: # [Path(f'nobilia/links/handle')]:
         print(f'Planning trajectory for "{part_path}"')
         printed_exprs = {}
         obj = km.get_data(part_path)
@@ -299,8 +292,8 @@ if __name__ == '__main__':
         weights = None
         if isinstance(base_joint, DiffDriveJoint):
             weights = {}
-            weights[base_joint.l_wheel_vel] = 0.002
-            weights[base_joint.r_wheel_vel] = 0.002
+            weights[base_joint.l_wheel_vel] = 0.001
+            weights[base_joint.r_wheel_vel] = 0.001
 
 
 
@@ -335,6 +328,7 @@ if __name__ == '__main__':
 
         integrator = CommandIntegrator(pushing_controller.qpb,
                                        integration_rules,
+                                       equilibrium=0.0004,
                                        start_state=start_state,
                                        recorded_terms={'distance': pushing_controller.geom_distance,
                                                        'gaze_align': pushing_controller.look_goal,
@@ -342,7 +336,7 @@ if __name__ == '__main__':
                                                        'location_x': base_joint.x_pos,
                                                        'location_y': base_joint.y_pos,
                                                        'rotation_a': base_joint.a_pos},
-                                       printed_exprs=printed_exprs)
+                                       printed_exprs={})
 
         # RUN
         int_factor = 0.02
@@ -350,7 +344,11 @@ if __name__ == '__main__':
         # print('\n'.join('{}: {}'.format(s, r) for s, r in integrator.integration_rules.items()))
         try:
             start = Time.now()
-            integrator.run(int_factor, 500, logging=False, real_time=False)
+            integrator.run(int_factor,
+                           800,
+                           logging=False,
+                           real_time=False,
+                           show_progress=True)
             total_dur.append((Time.now() - start).to_sec())
             n_iter.append(integrator.current_iteration + 1)
         except Exception as e:
