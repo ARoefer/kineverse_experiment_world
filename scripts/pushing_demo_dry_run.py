@@ -73,7 +73,7 @@ start_poses = {
   'fetch' : {'wrist_roll_joint'   : 0.0,
               'shoulder_pan_joint' : 0.3,
               'elbow_flex_joint'   : 1.72,
-              'forearm_roll_joint' : -0.4,
+              'forearm_roll_joint' : -1.2,
               'upperarm_roll_joint': -1.57,
               'wrist_flex_joint'   : 1.66,
               'shoulder_lift_joint': 1.4,
@@ -88,7 +88,9 @@ start_poses = {
            'r_wrist_flex_joint' : -1.05,
            'r_forearm_roll_joint': 3.14,
            'r_wrist_roll_joint': 0,
-           'torso_lift_joint'   : 0.16825},
+           'torso_lift_joint'   : 0.32},
+  'hsr' : {'torso_lift_joint': 0.4
+  },
   'iai_boxy': {'neck_shoulder_pan_joint': -1.57,
                'neck_shoulder_lift_joint': -1.88,
                'neck_elbow_joint': -2.0,
@@ -201,7 +203,7 @@ if __name__ == '__main__':
     km = GeometryModel()
     load_urdf(km, Path(robot), urdf_model)
     load_urdf(km, Path('kitchen'), kitchen_model)
-    # create_nobilia_shelf(km, Path('nobilia'), gm.frame3_rpy(0, 0, 1.2, 
+    # create_nobilia_shelf(km, Path('nobilia'), gm.frame3_rpy(0, 0, 0.4, 
     #                                                         gm.point3(1.2, 0, 0.8)))
 
     km.clean_structure()
@@ -228,7 +230,7 @@ if __name__ == '__main__':
     traj_vis   = TrajectoryVisualizer(visualizer)
 
     traj_vis.add_articulated_object(Path(robot),     km.get_data(robot))
-    traj_vis.add_articulated_object(Path('kitchen'), km.get_data('kitchen'))
+    # traj_vis.add_articulated_object(Path('kitchen'), km.get_data('kitchen'))
 
 
     # GOAL DEFINITION
@@ -282,12 +284,16 @@ if __name__ == '__main__':
     n_iter    = []
     total_dur = []
 
-    for part_path in [Path(f'kitchen/links/{p}') for p in kitchen_parts]: # [Path(f'nobilia/links/handle')]:
+    for part_path in [Path(f'kitchen/links/{p}') for p in kitchen_parts]:
+    # for part_path in [Path(f'nobilia/links/handle')]:
         print(f'Planning trajectory for "{part_path}"')
         printed_exprs = {}
         obj = km.get_data(part_path)
 
         start_state = {s: 0.7 for s in gm.free_symbols(obj.pose)}
+
+        active_parts_to_avoid = [p for p in km.get_active_geometry_raw(gm.free_symbols(obj.pose)).keys() if p != part_path]
+
 
         weights = None
         if isinstance(base_joint, DiffDriveJoint):
@@ -306,7 +312,8 @@ if __name__ == '__main__':
                                                    cam_path,
                                                    use_geom_circulation,
                                                    visualizer,
-                                                   weights)
+                                                   weights,
+                                                   collision_avoidance_paths=active_parts_to_avoid)
         else:
             pushing_controller = PushingController(km,
                                                    eef_path,
@@ -316,12 +323,14 @@ if __name__ == '__main__':
                                                    cam_path,
                                                    use_geom_circulation,
                                                    None,
-                                                   weights)
+                                                   weights,
+                                                   collision_avoidance_paths=active_parts_to_avoid)
 
         if robot in start_poses:
             start_state.update({gm.Position(Path(robot) + (k,)): v for k, v in start_poses[robot].items()})
 
         start_state.update({c.symbol: 0.0 for c in pushing_controller.controlled_values.values()})
+        # start_state.update({s: 1.84 for s in gm.free_symbols(obj.pose)})
         start_state.update({s: 0.4 for s in gm.free_symbols(obj.pose)})
 
         printed_exprs['relative_vel'] = gm.norm(pushing_controller.p_internals.relative_pos)
@@ -345,7 +354,7 @@ if __name__ == '__main__':
         try:
             start = Time.now()
             integrator.run(int_factor,
-                           800,
+                           1200,
                            logging=False,
                            real_time=False,
                            show_progress=True)

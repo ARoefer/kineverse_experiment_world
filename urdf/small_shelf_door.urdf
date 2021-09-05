@@ -52,19 +52,19 @@
 
   <link name="handle">
     <visual>
-      <origin rpy="0 0 0" xyz="0.05 0 0"/>
+      <origin rpy="1.57 0 0" xyz="0.05 0 0"/>
       <geometry>
         <cylinder radius="0.005" length="0.14"/>
       </geometry>
     </visual>
     <visual>
-      <origin rpy="0 1.57 0" xyz="0.025 0 0.07"/>
+      <origin rpy="0 1.57 0" xyz="0.025 0.07 0"/>
       <geometry>
         <cylinder radius="0.005" length="0.05"/>
       </geometry>
     </visual>
     <visual>
-      <origin rpy="0 1.57 0" xyz="0.025 0 -0.07"/>
+      <origin rpy="0 1.57 0" xyz="0.025 -0.07 0"/>
       <geometry>
         <cylinder radius="0.005" length="0.05"/>
       </geometry>
@@ -72,7 +72,7 @@
   </link>
   
   <joint name="handle_joint" type="fixed">
-    <origin rpy="0 0 0" xyz="0.0075 -0.1385 0" />
+    <origin rpy="1.57 0 0" xyz="0.0075 -0.1385 0" />
     <parent link="door" />
     <child link="handle" />
   </joint>
