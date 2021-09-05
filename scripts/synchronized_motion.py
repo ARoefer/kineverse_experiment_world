@@ -21,6 +21,41 @@ from kineverse_experiment_world.nobilia_shelf import create_nobilia_shelf
 from kineverse_experiment_world.cascading_qp  import CascadingQP
 from kineverse_experiment_world.utils         import insert_omni_base
 
+def generic_setup(km, robot_path, eef_link='gripper_link'):
+    joint_symbols = [j.position for j in km.get_data(f'{robot_path}/joints').values() 
+                                if hasattr(j, 'position') and gm.is_symbol(j.position)]
+    robot_controlled_symbols = {gm.DiffSymbol(j) for j in joint_symbols} # if 'torso' not in str(j)}
+    blacklist = set()
+    return joint_symbols, \
+           robot_controlled_symbols, \
+           {}, \
+           km.get_data(robot_path).links[eef_link], \
+           blacklist
+
+
+def pr2_setup(km, pr2_path):
+    start_pose = {'l_elbow_flex_joint' : -2.1213,
+                  'l_shoulder_lift_joint': 1.2963,
+                  'l_wrist_flex_joint' : -1.16,
+                  'r_shoulder_pan_joint': -1.0,
+                  'r_shoulder_lift_joint': 0.9,
+                  'r_upper_arm_roll_joint': -1.2,
+                  'r_elbow_flex_joint' : -2.1213,
+                  'r_wrist_flex_joint' : -1.05,
+                  'r_forearm_roll_joint': 3.14,
+                  'r_wrist_roll_joint': 0,
+                  'torso_lift_joint'   : 0.16825}
+    start_pose = {gm.Position(Path(f'{pr2_path}/{n}')): v for n, v in start_pose.items()}
+    joint_symbols = [j.position for j in km.get_data(f'{pr2_path}/joints').values() 
+                                if hasattr(j, 'position') and gm.is_symbol(j.position)]
+    robot_controlled_symbols = {gm.DiffSymbol(j) for j in joint_symbols} # if 'torso' not in str(j)}
+    blacklist = {gm.Velocity(Path(f'{pr2_path}/torso_lift_joint'))}
+    return joint_symbols, \
+           robot_controlled_symbols, \
+           start_pose, \
+           km.get_data(pr2_path).links['r_gripper_tool_frame'], \
+           blacklist
+
 
 if __name__ == '__main__':
     rospy.init_node('synchronized_motion')
@@ -28,8 +63,18 @@ if __name__ == '__main__':
     vis = ROSBPBVisualizer('~vis', base_frame='world')
 
     km = GeometryModel()
-    pr2_urdf = load_urdf_file('package://iai_pr2_description/robots/pr2_calibrated_with_ft2.xml')
-    load_urdf(km, Path('pr2'), pr2_urdf, Path('world'))
+    robot_type = rospy.get_param('~robot', 'pr2')
+    if robot_type.lower() == 'pr2':
+        robot_urdf = load_urdf_file('package://iai_pr2_description/robots/pr2_calibrated_with_ft2.xml')
+    elif robot_type.lower() == 'hsrb':
+        robot_urdf = load_urdf_file('package://hsr_description/robots/hsrb4s.obj.urdf')
+    else:
+        print(f'Unknown robot {robot_type}')
+        exit(1)
+
+    robot_name = robot_urdf.name
+    robot_path = Path(robot_name)
+    load_urdf(km, robot_path, robot_urdf, Path('world'))
 
     km.clean_structure()
 
@@ -43,41 +88,36 @@ if __name__ == '__main__':
     print('\n'.join(km.timeline_tags.keys()))
 
     if rospy.get_param('~use_base', False):
-        insert_omni_base(km, Path('pr2'), pr2_urdf.get_root(), 'world')
+        insert_omni_base(km, robot_path, robot_urdf.get_root(), 'world')
         km.clean_structure()
         km.dispatch_events()
 
-    pr2     = km.get_data('pr2')
+    robot   = km.get_data(robot_path)
     nobilia = km.get_data('nobilia')
 
     handle  = nobilia.links['handle']
-    eef     = pr2.links['r_gripper_tool_frame']
+
+    if robot_name == 'pr2':
+        joint_symbols, \
+        robot_controlled_symbols, \
+        start_pose, \
+        eef, \
+        blacklist = pr2_setup(km, robot_path)
+    else:
+        joint_symbols, \
+        robot_controlled_symbols, \
+        start_pose, \
+        eef, \
+        blacklist = generic_setup(km, robot_path, rospy.get_param('~eef', 'gripper_link'))
 
     collision_world = km.get_active_geometry(gm.free_symbols(handle.pose).union(gm.free_symbols(eef.pose)))
-
-    # Joint stuff
-    joint_symbols = [j.position for j in km.get_data(f'pr2/joints').values() 
-                                if hasattr(j, 'position') and gm.is_symbol(j.position)]
-    robot_controlled_symbols = {gm.DiffSymbol(j) for j in joint_symbols} # if 'torso' not in str(j)}
-    
 
     # Init step
     grasp_in_handle = gm.dot(gm.translation3(0.04, 0, 0), gm.rotation3_rpy(math.pi * 0.5, 0, math.pi))
     goal_pose       = gm.dot(handle.pose, grasp_in_handle)
     goal_0_pose     = gm.subs(goal_pose, {s: 0 for s in gm.free_symbols(goal_pose)})
 
-    start_pose = {'l_elbow_flex_joint' : -2.1213,
-                  'l_shoulder_lift_joint': 1.2963,
-                  'l_wrist_flex_joint' : -1.16,
-                  'r_shoulder_pan_joint': -1.0,
-                  'r_shoulder_lift_joint': 0.9,
-                  'r_upper_arm_roll_joint': -1.2,
-                  'r_elbow_flex_joint' : -2.1213,
-                  'r_wrist_flex_joint' : -1.05,
-                  'r_forearm_roll_joint': 3.14,
-                  'r_wrist_roll_joint': 0,
-                  'torso_lift_joint'   : 0.16825}
-    start_pose = {gm.Position(Path(f'pr2/{n}')): v for n, v in start_pose.items()}
+
     start_state = {s: 0 for s in gm.free_symbols(collision_world)}
     start_state.update(start_pose)
     ik_err, robot_start_state = ik_solve_one_shot(km, eef.pose, start_state, goal_0_pose)
@@ -108,8 +148,6 @@ if __name__ == '__main__':
     follower_goal_constraints = {'keep position': SC(-dyn_goal_pos_error,
                                                      -dyn_goal_pos_error, 10, dyn_goal_pos_error),
                                  'keep rotation': SC(-dyn_goal_rot_error, -dyn_goal_rot_error, 1, dyn_goal_rot_error)}
-
-    blacklist = {gm.Velocity(Path('pr2/torso_lift_joint'))}
 
     solver = CascadingQP(km, 
                          lead_goal_constraints, 
