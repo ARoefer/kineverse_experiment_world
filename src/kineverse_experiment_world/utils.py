@@ -113,7 +113,7 @@ def str2bool(v):
 
 def insert_omni_base(km, robot_path, root_link, world_frame='world', lin_vel=1.0, ang_vel=0.6):
     if not km.has_data(world_frame):
-        km.apply_operation_before(f'create {world_frame}', f'create {robot_path}', ExecFunction(Path('world'), Frame, ''))
+        km.apply_operation_before(f'create {world_frame}', f'create {robot_path}', ExecFunction(Path(world_frame), Frame, ''))
 
     base_joint_path = robot_path + Path(f'joints/to_{world_frame}')
     base_op = ExecFunction(base_joint_path,
@@ -140,7 +140,7 @@ def insert_diff_base(km,
                      wheel_distance=0.4,
                      wheel_vel_limit=0.6):
     if not km.has_data(world_frame):
-        km.apply_operation_before(f'create {world_frame}', f'create {robot_path}', ExecFunction(Path('world'), Frame, ''))
+        km.apply_operation_before(f'create {world_frame}', f'create {robot_path}', ExecFunction(Path(world_frame), Frame, ''))
 
     base_joint_path = robot_path + Path(f'joints/to_{world_frame}')
     base_op = ExecFunction(base_joint_path,
