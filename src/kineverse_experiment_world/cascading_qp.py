@@ -28,14 +28,11 @@ class CascadingQP(object):
         self.lead_symbols     = lead_symbols
         self.follower_symbols = follower_symbols
 
-        self.lead_controlled_symbols     = {gm.DiffSymbol(s) for s in lead_symbols 
-                                                             if gm.get_symbol_type(s) != gm.TYPE_UNKNOWN 
-                                                             and gm.DiffSymbol(s) not in controls_blacklist}
+        self.lead_controlled_symbols     = {s for s in union(gm.get_diff_symbols(c.expr) for c in lead_goal_constraints.values()) 
+                                               if s not in controls_blacklist}
         # Only update the symbols that are unique to the follower
-        self.follower_controlled_symbols = {gm.DiffSymbol(s) for s in follower_symbols 
-                                                             if gm.get_symbol_type(s) != gm.TYPE_UNKNOWN 
-                                                             and s not in lead_symbols 
-                                                             and gm.DiffSymbol(s) not in controls_blacklist}
+        self.follower_controlled_symbols = {s for s in union(gm.get_diff_symbols(c.expr) for c in follower_goal_constraints.values())
+                                               if s not in controls_blacklist and gm.IntSymbol(s) not in lead_symbols}
         
         f_gen_lead_cvs = self.gen_controlled_values if f_gen_lead_cvs is None else f_gen_lead_cvs
         lead_cvs, \

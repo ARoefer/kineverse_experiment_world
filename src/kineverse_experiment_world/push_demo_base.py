@@ -3,7 +3,9 @@ from collections import namedtuple
 import kineverse.gradients.gradient_math as gm
 
 from kineverse.model.geometry_model    import contact_geometry, \
-                                              generate_contact_model
+                                              generate_contact_model, \
+                                              closest_distance_constraint_world, \
+                                              closest_distance_constraint
 from kineverse.motion.min_qp_builder   import PID_Constraint as PIDC, \
                                               SoftConstraint as SC,   \
                                               Constraint,             \
@@ -93,7 +95,8 @@ class PushingController(object):
                        camera_path=None,
                        navigation_method='cross',
                        visualizer=None,
-                       weight_override=None):
+                       weight_override=None,
+                       collision_avoidance_paths=None):
         print(f'{actuated_object_path}\n{target_object_path}')
 
         actuated_object = km.get_data(actuated_object_path)
@@ -149,6 +152,14 @@ class PushingController(object):
         # GOAL CONSTAINT GENERATION
         # 'avoid_collisions': SC.from_constraint(closest_distance_constraint_world(eef_pose, eef_path[:-1], 0.03), 100)
         # }
+
+        if collision_avoidance_paths is not None:
+            for p in collision_avoidance_paths:
+                obj = km.get_data(p)
+                goal_constraints[f'avoid_collision {p}'] = SC.from_constraint(closest_distance_constraint(actuated_object.pose,
+                                                                                                          obj.pose,
+                                                                                                          actuated_object_path, p, 0.01), 100)
+
 
         goal_constraints.update({f'open_object_{x}': PIDC(s, s, 1) for x, s in enumerate(gm.free_symbols(target_object.pose))})
 

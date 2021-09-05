@@ -1,6 +1,7 @@
 import rospy
 import kineverse.gradients.gradient_math as gm
 import math
+import numpy as np
 
 from tqdm import tqdm
 
@@ -13,13 +14,16 @@ from kineverse.motion.min_qp_builder        import GeomQPBuilder as GQPB, \
                                                    depth_weight_controlled_values
 from kineverse.operations.urdf_operations   import load_urdf
 from kineverse.urdf_fix                     import load_urdf_file
-from kineverse.utils                        import generate_transition_function
+from kineverse.utils                        import generate_transition_function, \
+                                                   static_var_bounds
 
 from kineverse_tools.ik_solver              import ik_solve_one_shot
 
 from kineverse_experiment_world.nobilia_shelf import create_nobilia_shelf
 from kineverse_experiment_world.cascading_qp  import CascadingQP
-from kineverse_experiment_world.utils         import insert_omni_base
+from kineverse_experiment_world.utils         import insert_omni_base, \
+                                                     insert_diff_base, \
+                                                     load_model
 
 def generic_setup(km, robot_path, eef_link='gripper_link'):
     joint_symbols = [j.position for j in km.get_data(f'{robot_path}/joints').values() 
@@ -37,6 +41,7 @@ def pr2_setup(km, pr2_path):
     start_pose = {'l_elbow_flex_joint' : -2.1213,
                   'l_shoulder_lift_joint': 1.2963,
                   'l_wrist_flex_joint' : -1.16,
+                  'l_shoulder_pan_joint': 0.7,
                   'r_shoulder_pan_joint': -1.0,
                   'r_shoulder_lift_joint': 0.9,
                   'r_upper_arm_roll_joint': -1.2,
@@ -68,6 +73,8 @@ if __name__ == '__main__':
         robot_urdf = load_urdf_file('package://iai_pr2_description/robots/pr2_calibrated_with_ft2.xml')
     elif robot_type.lower() == 'hsrb':
         robot_urdf = load_urdf_file('package://hsr_description/robots/hsrb4s.obj.urdf')
+    elif robot_type.lower() == 'fetch':
+        robot_urdf = load_urdf_file('package://fetch_description/robots/fetch.urdf')
     else:
         print(f'Unknown robot {robot_type}')
         exit(1)
@@ -78,24 +85,38 @@ if __name__ == '__main__':
 
     km.clean_structure()
 
-    create_nobilia_shelf(km,
-                         Path('nobilia'),
-                         gm.frame3_rpy(0, 0, 0.57, gm.point3(1.0, 0, 0.7)),
-                         Path('world'))
+    model_name = load_model(km, 
+                            rospy.get_param('~model', 'nobilia'),
+                            'world',
+                            1.0, 0, 0.7, rospy.get_param('~yaw', 0.57))
     km.clean_structure()    
     km.dispatch_events()
 
     print('\n'.join(km.timeline_tags.keys()))
 
     if rospy.get_param('~use_base', False):
-        insert_omni_base(km, robot_path, robot_urdf.get_root(), 'world')
+        if robot_type.lower() == 'fetch':
+            insert_diff_base(km, 
+                             robot_path, 
+                             robot_urdf.get_root(),
+                             km.get_data(robot_path + ('joints', 'r_wheel_joint', 'position')),
+                             km.get_data(robot_path + ('joints', 'l_wheel_joint', 'position')),
+                             world_frame='world',
+                             wheel_radius=0.12 * 0.5,
+                             wheel_distance=0.3748,
+                             wheel_vel_limit=17.4)
+        else:
+            insert_omni_base(km, robot_path, robot_urdf.get_root(), 'world')
         km.clean_structure()
         km.dispatch_events()
 
     robot   = km.get_data(robot_path)
-    nobilia = km.get_data('nobilia')
+    nobilia = km.get_data(model_name)
 
-    handle  = nobilia.links['handle']
+    handle  = nobilia.links[rospy.get_param('~handle', 'handle')]
+    integration_rules = None
+
+    sym_dt = gm.Symbol('dT')
 
     if robot_name == 'pr2':
         joint_symbols, \
@@ -103,6 +124,30 @@ if __name__ == '__main__':
         start_pose, \
         eef, \
         blacklist = pr2_setup(km, robot_path)
+    elif robot_name == 'fetch':
+        joint_symbols, \
+        robot_controlled_symbols, \
+        start_pose, \
+        eef, \
+        blacklist = generic_setup(km, robot_path, rospy.get_param('~eef', 'gripper_link'))
+        if rospy.get_param('~use_base', False):
+            base_joint = robot.joints['to_world']
+            robot_controlled_symbols |= {base_joint.l_wheel_vel, base_joint.r_wheel_vel}
+            robot_controlled_symbols.difference_update(gm.DiffSymbol(s) for s in [base_joint.x_pos, base_joint.y_pos, base_joint.a_pos])
+            blacklist.update(gm.DiffSymbol(s) for s in [base_joint.x_pos, base_joint.y_pos, base_joint.a_pos])
+            integration_rules = {
+                      base_joint.x_pos: base_joint.x_pos + sym_dt * (base_joint.r_wheel_vel * gm.cos(base_joint.a_pos) * base_joint.wheel_radius * 0.5 + base_joint.l_wheel_vel * gm.cos(base_joint.a_pos) * base_joint.wheel_radius * 0.5),
+                      base_joint.y_pos: base_joint.y_pos + sym_dt * (base_joint.r_wheel_vel * gm.sin(base_joint.a_pos) * base_joint.wheel_radius * 0.5 + base_joint.l_wheel_vel * gm.sin(base_joint.a_pos) * base_joint.wheel_radius * 0.5),
+                      base_joint.a_pos: base_joint.a_pos + sym_dt * (base_joint.r_wheel_vel * (base_joint.wheel_radius / base_joint.wheel_distance) + base_joint.l_wheel_vel * (- base_joint.wheel_radius / base_joint.wheel_distance))}
+        start_pose = {'wrist_roll_joint'   : 0.0,
+                      'shoulder_pan_joint' : 0.3,
+                      'elbow_flex_joint'   : 1.72,
+                      'forearm_roll_joint' : -1.2,
+                      'upperarm_roll_joint': -1.57,
+                      'wrist_flex_joint'   : 1.66,
+                      'shoulder_lift_joint': 1.4,
+                      'torso_lift_joint'   : 0.2}
+        start_pose = {gm.Position(Path(f'{robot_path}/{n}')): v for n, v in start_pose.items()}
     else:
         joint_symbols, \
         robot_controlled_symbols, \
@@ -116,7 +161,6 @@ if __name__ == '__main__':
     grasp_in_handle = gm.dot(gm.translation3(0.04, 0, 0), gm.rotation3_rpy(math.pi * 0.5, 0, math.pi))
     goal_pose       = gm.dot(handle.pose, grasp_in_handle)
     goal_0_pose     = gm.subs(goal_pose, {s: 0 for s in gm.free_symbols(goal_pose)})
-
 
     start_state = {s: 0 for s in gm.free_symbols(collision_world)}
     start_state.update(start_pose)
@@ -142,8 +186,10 @@ if __name__ == '__main__':
     dyn_goal_pos_error = gm.norm(gm.pos_of(eef.pose) - gm.pos_of(goal_pose))
     dyn_goal_rot_error = gm.norm(eef.pose[:3, :3] - goal_pose[:3, :3])
 
-    lead_goal_constraints = {'open_object': SC(1.84 - nobilia.joints['hinge'].position,
-                                               1.84 - nobilia.joints['hinge'].position, 1, nobilia.joints['hinge'].position)}
+    o_vars, bounds, _ = static_var_bounds(km, gm.free_symbols(handle.pose))
+
+    lead_goal_constraints = {f'open_object {s}': SC(ub - s,
+                                                    ub - s, 1, s) for s, (_, ub) in zip(o_vars, bounds)}
 
     follower_goal_constraints = {'keep position': SC(-dyn_goal_pos_error,
                                                      -dyn_goal_pos_error, 10, dyn_goal_pos_error),
@@ -153,33 +199,44 @@ if __name__ == '__main__':
                          lead_goal_constraints, 
                          follower_goal_constraints, 
                          f_gen_follower_cvs=gen_dv_cvs,
-                         controls_blacklist=blacklist
+                         controls_blacklist=blacklist,
+                         transition_overrides=integration_rules
                          )
 
     # exit()
-    sym_dt = gm.Symbol('dT')
-    t_symbols, t_function, t_params = generate_transition_function(sym_dt, solver.state_symbols)
+    t_symbols, t_function, t_params = generate_transition_function(sym_dt, solver.state_symbols, overrides=integration_rules)
 
     start_state.update({s: 0 for s in solver.controlled_symbols})
     start_state.update({s: 0 for s in blacklist})
     start_state[sym_dt] = 0.02
+
+    times = []
+
+    visualize = rospy.get_param('~vis', False)
+    
     for x in tqdm(range(500), desc='Generating motion...'):
         try:
+            start = rospy.Time.now()
             cmd = solver.get_cmd(start_state.copy(), deltaT=start_state[sym_dt])
+            times.append((rospy.Time.now() - start).to_sec())
         except Exception as e:
             print(f'Exception during calculation of next step:\n{e}')
             break
 
         for s, v in zip(t_symbols, t_function.call2([start_state[s] if s not in cmd else cmd[s] for s in t_params])):
             start_state[s] = v
-        collision_world.update_world(start_state)
-        vis.begin_draw_cycle('cascading_qp')
-        vis.draw_world('cascading_qp', collision_world)
-        vis.render('cascading_qp')
+        
+        if visualize:
+            collision_world.update_world(start_state)
+            vis.begin_draw_cycle('cascading_qp')
+            vis.draw_world('cascading_qp', collision_world)
+            vis.render('cascading_qp')
 
         if solver.equilibrium_reached():
             break
 
         # integrator.run(0.02, 500, logging=False, real_time=True)
 
+    times = np.array(times)
+    print(f'Timing stats:\nMean: {times.mean()} s\nSD: {times.std()} s\nMin: {times.min()} s\nMax: {times.max()} s')
 
