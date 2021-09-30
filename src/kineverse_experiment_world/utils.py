@@ -193,8 +193,8 @@ def load_localized_model(km, model_path, reference_frame):
                           *[gm.Position(f'{urdf_model.name}_location_{x}') for x in 'xyz'], 
                           gm.Position(f'{urdf_model.name}_location_yaw'))
     else:
-        return load_localized_model(km,
-                                    model_path, 
-                                    reference_frame, 
-                                    *[gm.Position(f'nobilia_location_{x}') for x in 'xyz'], 
-                                    gm.Position('nobilia_location_yaw'))
+        return load_model(km,
+                          model_path, 
+                          reference_frame, 
+                          *[gm.Position(f'nobilia_location_{x}') for x in 'xyz'], 
+                          gm.Position('nobilia_location_yaw'))

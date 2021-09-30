@@ -1,5 +1,6 @@
 <launch>
     <arg name="tracking_samples" default="7"/>
+    <arg name="reference_frame"  default="base_footprint"/>
 
 	<include file="$(find kineverse_experiment_world)/launch/pr2_aruco_shelf_drawer_tracking.launch"/>
 
@@ -8,7 +9,7 @@
         <!-- <remap from="~controls" to="/nobilia_kinematic_sim/command"/> -->
         <param name="~model" value="package://kineverse_experiment_world/urdf/small_shelf_drawer.urdf"/>
         <param name="~features" type="yaml" value="{small_shelf_drawer/links/marker_body: obs_shelf_body, small_shelf_drawer/links/marker_drawer_top: obs_shelf_top_drawer, small_shelf_drawer/links/marker_drawer_bottom: obs_shelf_bottom_drawer}"/>
-        <param name="~reference_frame" value="base_footprint"/>
+        <param name="~reference_frame" value="$(arg reference_frame)"/>
         <param name="~samples" value="$(arg tracking_samples)"/>
     </node>
 </launch>

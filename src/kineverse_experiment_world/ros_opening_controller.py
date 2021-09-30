@@ -31,7 +31,7 @@ from kineverse_experiment_world.utils                import np_inverse_frame
 
 def gen_dv_cvs(km, constraints, controlled_symbols):
     cvs, constraints = generate_controlled_values(constraints, controlled_symbols)
-    cvs = depth_weight_controlled_values(km, cvs, exp_factor=1.02)
+    cvs = depth_weight_controlled_values(km, cvs, exp_factor=2.0)
     print('\n'.join(f'{cv.symbol}: {cv.weight_id}' for _, cv in sorted(cvs.items())))
     return cvs, constraints
 
@@ -55,7 +55,12 @@ class ROSOpeningBehavior(object):
         self.cam_path        = cam_path
 
         self.visualizer         = visualizer
-        self.weights            = weights
+        if weights is None:
+            cvs, _ = gen_dv_cvs(km, {}, controlled_symbols)
+            self.weights = {c.symbol: c.weight_id for c in cvs.values()}
+        else:
+            self.weights = weights
+
         self.controlled_symbols = controlled_symbols
 
         self.controller = None
@@ -189,21 +194,34 @@ class ROSOpeningBehavior(object):
                             self.gripper_wrapper.sync_set_gripper_position(0.07)
                             self._last_controller_update = None
                             print('Gripper is open. Proceeding to grasp...')
+                            draw_fn = None
+
+                            eef_pose = self.km.get_data(self.eef_path).pose
+
+                            if self.visualizer is not None:
+                                self.visualizer.begin_draw_cycle('grasp pose')
+                                self.visualizer.draw_poses('grasp pose', np.eye(4), 0.2, 0.01, [gm.subs(self._grasp_poses[p], self._state)])
+                                self.visualizer.render('grasp pose')
+
+                                def draw_fn(state):
+                                    self.visualizer.begin_draw_cycle('debug_grasp')
+                                    self.visualizer.draw_poses('debug_grasp', np.eye(4), 1.0, 0.01, [gm.subs(eef_pose, state), gm.subs(self._grasp_poses[p], state)])
+                                    self.visualizer.render('debug_grasp')
+                                    # print('\n'.join(f'{s}: {v}' for s, v in state.items()))
+
                             self.controller = SixDPoseController(self.km,
-                                                                 self.km.get_data(self.eef_path).pose,
+                                                                 eef_pose,
                                                                  self._grasp_poses[p],
                                                                  self.controlled_symbols,
-                                                                 self.weights)
+                                                                 self.weights,
+                                                                 draw_fn)
 
-                            self.visualizer.begin_draw_cycle('grasp pose')
-                            self.visualizer.draw_poses('grasp pose', np.eye(4), 0.2, 0.01, [gm.subs(self._grasp_poses[p], self._state)])
-                            self.visualizer.render('grasp pose')
 
                             self._phase = 'grasping'
                             print(f'Now entering {self._phase} state')
                             break
                     else: 
-                        print('None of the monitored symbols are closed:\n  {}'.format('\n  '.join(f'{self._state[s]} < {self._var_upper_bound[s]}' for s in self._target_map.keys())))
+                        print('None of the monitored symbols are closed:\n  {}'.format('\n  '.join(f'{self._state[s]} < {self._var_upper_bound[s]}' for s in self._target_map.keys() if s in self._state)))
             elif self._phase == 'grasping':
                 # check if grasp is acheived
                 # -> close gripper
@@ -310,7 +328,7 @@ class ROSOpeningBehavior(object):
                     eef = self.km.get_data(self.eef_path)
                     with self._state_lock:
                         static_eef_pose = gm.subs(eef.pose, self._state)
-                    goal_pose = static_eef_pose.dot(np.array([[1, 0, 0, -0.07],
+                    goal_pose = static_eef_pose.dot(np.array([[1, 0, 0, -0.12],
                                                               [0, 1, 0, 0],
                                                               [0, 0, 1, 0],
                                                               [0, 0, 0, 1]]))

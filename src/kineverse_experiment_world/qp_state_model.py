@@ -9,7 +9,8 @@ from kineverse.motion.min_qp_builder import TypedQPBuilder as TQPB,    \
                                             generate_controlled_values,\
                                             QPSolverException
 from kineverse.utils                 import union, \
-                                            generate_transition_function
+                                            generate_transition_function, \
+                                            static_var_bounds
 from kineverse.time_wrapper          import Time
 
 class Particle(object):
@@ -100,7 +101,12 @@ class QPStateModel(object):
 
         self.qp = TQPB(hard_constraints, flat_obs_constraints, cvs)
 
-        self._state = {s: 0 for s in state_vars}
+        st_bound_vars, st_bounds, st_unbounded = static_var_bounds(km, state_vars)
+        self._state = {s: 0 for s in st_unbounded} # np.random.uniform(-1.0, 1.0) for s in st_unbounded}
+
+        for vb, (lb, ub) in zip(st_bound_vars, st_bounds):
+            self._state[vb] = np.random.uniform(lb, ub)
+
         self._state_buffer = []
         self._state.update({s: 0 for s in self.transition_args})
         self._obs_state = {s: 0 for s in sum(self.obs_vars.values(), [])}

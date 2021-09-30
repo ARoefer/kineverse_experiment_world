@@ -1,5 +1,6 @@
 <launch>
 	<arg name="tracking_samples" default="7"/>
+    <arg name="reference_frame"  default="base_footprint"/>
 
     <include file="$(find kineverse_experiment_world)/launch/pr2_aruco_nobilia_tracking.launch"/>
 
@@ -8,7 +9,7 @@
         <!-- <remap from="~controls" to="/nobilia_kinematic_sim/command"/> -->
         <param name="~model" value="nobilia"/>
         <param name="~features" type="yaml" value="{nobilia/markers/body: obs_nobilia_body, nobilia/markers/top_panel: obs_nobilia_top_panel}"/>
-        <param name="~reference_frame" value="base_footprint"/>
+        <param name="~reference_frame" value="$(arg reference_frame)"/>
         <param name="~samples" value="$(arg tracking_samples)"/>
     </node>
 </launch>

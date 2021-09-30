@@ -2,6 +2,7 @@ import rospy
 import tf2_ros
 import math
 import kineverse.gradients.gradient_math as gm
+import threading
 
 from collections           import namedtuple
 from multiprocessing       import RLock
@@ -12,7 +13,8 @@ from pr2_controllers_msgs.msg import Pr2GripperCommand    as Pr2GripperCommandMs
                                      JointControllerState as JointControllerStateMsg
 from sensor_msgs.msg          import JointState           as JointStateMsg
 
-from kineverse_experiment_world.robot_interfaces import GripperWrapper
+from kineverse_experiment_world.robot_interfaces import GripperWrapper, \
+                                                        RobotCommandProcessor
 from kineverse_experiment_world.utils            import np_frame3_quaternion, \
                                                         np_vector3
 
@@ -24,25 +26,38 @@ class PR2VelCommandProcessor(RobotCommandProcessor):
                        joint_vel_symbols,
                        base_topic=None,
                        base_symbols=None,
+                       base_watchdog=rospy.Duration(0.4),
                        reference_frame='odom'):
-        self.joint_aliases = {s: str(Path(gm.erase_type(s))[-1]) for s in joint_vel_symbols}
+        self.control_alias = {s: str(Path(gm.erase_type(s))[-1]) for s in joint_vel_symbols}
         self._robot_cmd_msg      = JointStateMsg()
-        self._robot_cmd_msg.name = list(control_alias.keys())
+        self._robot_cmd_msg.name = list(self.control_alias.keys())
         self._state_cb = None
         self.robot_prefix = robot_prefix
 
         if base_symbols is not None:
             self.base_aliases     = base_symbols
             self.tf_buffer        = tf2_ros.Buffer()
-            self.listener         = tf2_ros.TransformListener(tf_buffer)
+            self.listener         = tf2_ros.TransformListener(self.tf_buffer)
             self.reference_frame  = reference_frame
             self._base_cmd_msg    = TwistMsg()
-            self.pub_base_command = rospy.Publisher(base_topic, JointStateMsg, queue_size=1, tcp_nodelay=True)
+            self.pub_base_command = rospy.Publisher(base_topic, TwistMsg, queue_size=1, tcp_nodelay=True)
+            self._base_last_cmd_stamp = None
+            self._base_cmd_lock       = RLock()
+            self._base_thread     = threading.Thread(target=self._base_cmd_repeater, args=(base_watchdog, ))
+            self._base_thread.start()
         else:
             self.base_aliases = None
 
         self.pub_joint_command = rospy.Publisher(joint_topic, JointStateMsg, queue_size=1, tcp_nodelay=True)
         self.sub_robot_js    = rospy.Subscriber('/joint_states',  JointStateMsg, callback=self.cb_robot_js, queue_size=1)
+
+    def _base_cmd_repeater(self, watchdog_timeout):
+        while not rospy.is_shutdown():
+            now = rospy.Time.now()
+            with self._base_cmd_lock:
+                if self._base_last_cmd_stamp is not None and (now - self._base_last_cmd_stamp) < watchdog_timeout:
+                    self.pub_base_command.publish(self._base_cmd_msg)
+                rospy.sleep(0.01)
 
 
     def send_command(self, cmd):
@@ -64,13 +79,14 @@ class PR2VelCommandProcessor(RobotCommandProcessor):
                     local_control = tf.dot(np_vector3(cmd[self.base_aliases.xv],
                                                       cmd[self.base_aliases.yv],
                                                       0)).sum(axis=1)
-                    self._base_cmd_msg.linear.x  = local_control[0]
-                    self._base_cmd_msg.linear.y  = local_control[1]
-                    self._base_cmd_msg.angular.z = cmd[self.base_aliases.av]
-                    self.pub_base_command.publish(self._base_cmd_msg)
+                    with self._base_cmd_lock:
+                        self._base_cmd_msg.linear.x  = local_control[0]
+                        self._base_cmd_msg.linear.y  = local_control[1]
+                        self._base_cmd_msg.angular.z = cmd[self.base_aliases.av]
+                        self._base_last_cmd_stamp = rospy.Time.now()
                 except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
                     print(f'Exception raised while looking up {self.reference_frame} -> base_footprint:\n{e}')
-                    continue
+                    return
 
         self.pub_joint_command.publish(self._robot_cmd_msg)
 
@@ -93,12 +109,15 @@ class PR2VelCommandProcessor(RobotCommandProcessor):
                 trans = self.tf_buffer.lookup_transform(self.reference_frame,
                                                         'base_footprint',
                                                         rospy.Time(0))
-                state_update[self.base_aliases.ap] = math.acos(trans.rotation.w) * 2
-                state_update[self.base_aliases.xp] = trans.translation.x
-                state_update[self.base_aliases.yp] = trans.translation.y
+                state_update[self.base_aliases.ap] = math.acos(trans.transform.rotation.w) * 2
+                state_update[self.base_aliases.xp] = trans.transform.translation.x
+                state_update[self.base_aliases.yp] = trans.transform.translation.y
+                state_update[self.base_aliases.av] = 0
+                state_update[self.base_aliases.xv] = 0
+                state_update[self.base_aliases.yv] = 0
             except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
                 print(f'Exception raised while looking up {self.reference_frame} -> base_footprint:\n{e}')
-                continue
+                return
 
         self._state_cb(state_update)
 

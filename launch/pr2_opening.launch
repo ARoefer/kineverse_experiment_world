@@ -6,7 +6,7 @@
 	</include>
 
 
-	<node name="pr2_pushing" pkg="kineverse_experiment_world" type="pr2_pushing.py" output="screen" if="$(eval arg('object') == 'nobilia')">
+	<node name="pr2_opening" pkg="kineverse_experiment_world" type="pr2_opening.py" output="screen" if="$(eval arg('object') == 'nobilia')">
 		<remap from="~robot_command" to="/pr2_vel_controller/command"/>
 		<remap from="~external_command" to="/nobilia_estimator/controls"/>
 		<remap from="~external_js" to="/nobilia_estimator/state_estimate"/>
@@ -15,7 +15,7 @@
 		<param name="~links" type="yaml" value="{nobilia/links/handle: [0.04, 0, 0, 1.57, 0, 3.14]}"/>
 	</node>
 
-	<node name="pr2_pushing" pkg="kineverse_experiment_world" type="pr2_pushing.py" output="screen" if="$(eval arg('object') == 'shelf_door')">
+	<node name="pr2_opening" pkg="kineverse_experiment_world" type="pr2_opening.py" output="screen" if="$(eval arg('object') == 'shelf_door')">
 		<remap from="~robot_command" to="/pr2_vel_controller/command"/>
 		<remap from="~external_command" to="/shelf_door_estimator/controls"/>
 		<remap from="~external_js" to="/shelf_door_estimator/state_estimate"/>
@@ -24,7 +24,7 @@
 		<param name="~links" type="yaml" value="{small_shelf_door/links/handle: [0.04, 0, 0, 1.57, 0, 3.14]}"/>
 	</node>
 
-	<node name="pr2_pushing" pkg="kineverse_experiment_world" type="pr2_pushing.py" output="screen" if="$(eval arg('object') == 'shelf_drawer')">
+	<node name="pr2_opening" pkg="kineverse_experiment_world" type="pr2_opening.py" output="screen" if="$(eval arg('object') == 'shelf_drawer')">
 		<remap from="~robot_command" to="/pr2_vel_controller/command"/>
 		<remap from="~external_command" to="/shelf_drawer_estimator/controls"/>
 		<remap from="~external_js" to="/shelf_drawer_estimator/state_estimate"/>
