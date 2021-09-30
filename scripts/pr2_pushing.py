@@ -19,12 +19,12 @@ from kineverse_experiment_world.nobilia_shelf import create_nobilia_shelf
 from kineverse_experiment_world.utils import insert_omni_base, load_localized_model
 
 from kineverse_experiment_world.ros_pushing_controller import ROSPushingBehavior
-from kineverse_experiment_world.pr2_things             import PR2GripperWrapper
+from kineverse_experiment_world.pr2_things             import PR2GripperWrapper, \
+                                                              PR2VelCommandProcessor, \
+                                                              BaseSymbols
 
 if __name__ == '__main__':
     rospy.init_node('pr2_pushing')
-
-    use_base = rospy.get_param('~use_base', False)
 
     if not rospy.has_param('~model'):
         print('Parameter ~model needs to be set to either a urdf path, or "nobilia"')
@@ -52,11 +52,12 @@ if __name__ == '__main__':
     load_urdf(km, Path('pr2'), urdf_model)
     km.clean_structure()
 
+    reference_frame = rospy.get_param('~reference_frame', urdf_model.get_root())
+    use_base = reference_frame != urdf_model.get_root()
+
     if use_base:
-        insert_omni_base(km, Path('pr2'), urdf_model.get_root(), 'world')
-        reference_frame = 'world'
-    else:
-        reference_frame = urdf_model.get_root()
+        insert_omni_base(km, Path('pr2'), urdf_model.get_root(), reference_frame)
+        base_joint_path = Path(f'pr2/joints/to_{reference_frame}')
 
     visualizer = ROSBPBVisualizer('~vis', base_frame=reference_frame)
 
@@ -70,9 +71,15 @@ if __name__ == '__main__':
     joint_symbols = [j.position for j in km.get_data(f'pr2/joints').values() 
                                 if hasattr(j, 'position') and gm.is_symbol(j.position)]
     robot_controlled_symbols = {gm.DiffSymbol(j) for j in joint_symbols if 'torso' not in str(j)}
+    
+    base_symbols = None
     if use_base:
-        base_joint = km.get_data(base_joint_path)
-        robot_controlled_symbols |= {gm.get_diff(x) for x in [base_joint.x_pos, base_joint.y_pos, base_joint.a_pos]}
+        base_joint   = km.get_data(base_joint_path)
+        base_symbols = BaseSymbols(base_joint.x_pos, base_joint.y_pos, base_joint.a_pos,
+                                   gm.DiffSymbol(base_joint.x_pos),
+                                   gm.DiffSymbol(base_joint.y_pos),
+                                   gm.DiffSymbol(base_joint.a_pos))
+        robot_controlled_symbols |= {gm.DiffSymbol(x) for x in [base_joint.x_pos, base_joint.y_pos, base_joint.a_pos]}
 
     eef_path = Path(f'pr2/links/{eef_link}')
     cam_path = Path('pr2/links/head_mount_link')
@@ -96,14 +103,21 @@ if __name__ == '__main__':
 
     gripper = PR2GripperWrapper('/r_gripper_controller')
 
+    pr2_commander = PR2VelCommandProcessor(Path('pr2'),
+                                           '/pr2_vel_controller/command',
+                                           robot_controlled_symbols,
+                                           '/base_controller/command',
+                                           base_symbols,
+                                           reference_frame=reference_frame)
+
     behavior = ROSPushingBehavior(km,
+                                  pr2_commander,
                                   gripper,
                                   Path('pr2'),
                                   eef_path,
                                   [Path(p) for p in body_paths],
                                   robot_controlled_symbols,
-                                  {s: str(Path(gm.erase_type(s))[-1]) for s in robot_controlled_symbols},
-                                  cam_path,
+                                  None, # cam_path,
                                   resting_pose=resting_pose,
                                   visualizer=visualizer,
                                   navigation_method=nav_method)

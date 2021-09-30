@@ -21,13 +21,13 @@ from kineverse_experiment_world.nobilia_shelf import create_nobilia_shelf
 from kineverse_experiment_world.utils import insert_omni_base, load_localized_model
 
 from kineverse_experiment_world.ros_opening_controller import ROSOpeningBehavior
-from kineverse_experiment_world.pr2_things             import PR2GripperWrapper
+from kineverse_experiment_world.pr2_things             import PR2GripperWrapper, \
+                                                              PR2VelCommandProcessor, \
+                                                              BaseSymbols
 
 
 if __name__ == '__main__':
     rospy.init_node('pr2_opening')
-
-    use_base = rospy.get_param('~use_base', False)
 
     if not rospy.has_param('~model'):
         print('Parameter ~model needs to be set to either a urdf path, or "nobilia"')
@@ -55,9 +55,13 @@ if __name__ == '__main__':
     load_urdf(km, Path('pr2'), urdf_model)
     km.clean_structure()
 
+    reference_frame = rospy.get_param('~reference_frame', 'base_footprint')
+    use_base = reference_frame != 'base_footprint'
+
     if use_base:
-        insert_omni_base(km, Path('pr2'), urdf_model.get_root(), 'odom')
-        reference_frame = 'odom'
+        insert_omni_base(km, Path('pr2'), urdf_model.get_root(), reference_frame, lin_vel=0.05)
+        base_joint_path = Path(f'pr2/joints/to_{reference_frame}')
+        km.dispatch_events()
     else:
         reference_frame = urdf_model.get_root()
 
@@ -117,14 +121,18 @@ if __name__ == '__main__':
             print(f'Grasp pose of {p} has {len(pose_params)} parameters but only 6 or 7 are permissable.')
             exit(1)
 
-    monitoring_threshold = rospy.get_param('~m_threshold', 0.7)
+    monitoring_threshold = rospy.get_param('~m_threshold', 0.6)
 
-    pr2_commander = PR2VelCommandProcessor('/pr2_vel_controller/command',
+    pr2_commander = PR2VelCommandProcessor(Path('pr2'),
+                                           '/pr2_vel_controller/command',
                                            robot_controlled_symbols,
-                                           '/base_command',
-                                           base_symbols)
+                                           '/base_controller/command',
+                                           base_symbols,
+                                           reference_frame=reference_frame)
 
     gripper = PR2GripperWrapper('/r_gripper_controller')
+
+    print('\n'.join(str(s) for s in robot_controlled_symbols))
 
     behavior = ROSOpeningBehavior(km,
                                   pr2_commander,
@@ -135,9 +143,9 @@ if __name__ == '__main__':
                                   robot_controlled_symbols,
                                   cam_path,
                                   resting_pose=resting_pose,
-                                  visualizer=visualizer,
+                                  visualizer=None,
                                   monitoring_threshold=monitoring_threshold,
-                                  acceptance_threshold=min(monitoring_threshold + 0.1, 1),
+                                  acceptance_threshold=min(monitoring_threshold + 0.3, 1),
                                   control_mode='vel')
 
     while not rospy.is_shutdown():

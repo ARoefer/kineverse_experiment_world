@@ -2,6 +2,7 @@
 	<arg name="object" default="nobilia"/>
 	<arg name="tracking_samples" default="4"/>
 	<arg name="control" default="vel"/>
+	<arg name="reference_frame" default="base_footprint"/>
 
 	<include file="$(find kineverse_experiment_world)/launch/pr2_nobilia_estimation.launch"      pass_all_args="true" if="$(eval arg('object') == 'nobilia')"/>
 	<include file="$(find kineverse_experiment_world)/launch/pr2_shelf_door_estimation.launch"   pass_all_args="true" if="$(eval arg('object') == 'shelf_door')"/>

@@ -129,8 +129,8 @@ class ROSQPEManager(object):
                        reference_frame='world', urdf_param='/qp_description_check', update_freq=30,
                        observation_alias=None):
         self.tracker          = tracker 
-        self.last_observation = {}
-        self.last_update      = None
+        self.last_observation = 0
+        self.last_update      = 0
         self.reference_frame  = reference_frame
         self.observation_aliases = {o: o for o in tracker.observation_names}
         if observation_alias is not None:
@@ -160,6 +160,7 @@ class ROSQPEManager(object):
         ref_frames = {}
         
         num_valid_obs = 0
+        last_observation = {}
 
         for trans in transform_stamped_array_msg.transforms:
             if trans.child_frame_id not in self.observation_aliases:
@@ -193,7 +194,7 @@ class ROSQPEManager(object):
 
                 matrix = np_ref_trans.dot(matrix)
             
-            self.last_observation[self.observation_aliases[trans.child_frame_id]] = matrix
+            last_observation[self.observation_aliases[trans.child_frame_id]] = matrix
             num_valid_obs += 1
                 # self.last_observation[trans.child_frame_id] = np_6d_pose_feature(trans.transform.translation.x, 
                 #                                                                  trans.transform.translation.y, 
@@ -207,13 +208,14 @@ class ROSQPEManager(object):
                 if num_valid_obs == 0:
                     return
 
-                self.tracker.process_observation(self.last_observation)
+                self.tracker.process_observation(last_observation)
+                self.last_observation += 1
             except QPSolverException as e:
-                print(f'Solver crashed during observation update. Skipping observation...')
+                print(f'Solver crashed during observation update. Skipping observation... Error:\n{e}')
                 return
         self.vis.begin_draw_cycle('observations')
         # temp_poses = [gm.frame3_axis_angle(feature[3:] / np.sqrt(np.sum(feature[3:]**2)), np.sqrt(np.sum(feature[3:]**2)), feature[:3]) for feature in self.last_observation.values()]
-        self.vis.draw_poses('observations', np.eye(4), 0.2, 0.01, self.last_observation.values())
+        self.vis.draw_poses('observations', np.eye(4), 0.2, 0.01, last_observation.values())
         # self.vis.draw_poses('observations', np.eye(4), 0.2, 0.01, temp_poses)
         self.vis.render('observations')
 
@@ -223,8 +225,10 @@ class ROSQPEManager(object):
         self.tracker.process_control(self.last_control)
 
     def cb_update(self, *args):
-        if len(self.last_observation) == 0:
+        if self.last_observation == self.last_update:
             return
+
+        self.last_update = self.last_observation
 
         est_state = self.tracker.get_estimated_state()
 

@@ -37,6 +37,8 @@ def generate_push_closing(km, grounding_state, controlled_symbols,
     neutral_tangent = gm.cross(contact_grad, contact_normal)
     active_tangent  = gm.cross(neutral_tangent, contact_normal)
 
+    contact_constraints, in_contact = generate_contact_model(robot_cp, controlled_symbols, object_cp, contact_normal, gm.free_symbols(obj_pose))
+    
     target_pos = None
     if nav_method == 'linear':
         geom_distance = gm.norm(object_cp + active_tangent * geom_distance + contact_grad * 0.05 - robot_cp)
@@ -45,6 +47,8 @@ def generate_push_closing(km, grounding_state, controlled_symbols,
         geom_distance = gm.norm(object_cp + active_tangent * dist_scaling - robot_cp)
     elif nav_method == 'cross':
         geom_distance = gm.norm(object_cp + active_tangent * gm.norm(neutral_tangent) + contact_grad * 0.05 - robot_cp)
+    elif nav_method == 'cross_deep':
+        geom_distance = gm.norm(object_cp + active_tangent * gm.norm(neutral_tangent) + contact_grad * -gm.dot_product(contact_normal, contact_grad) - robot_cp)
     elif nav_method == 'none' or nav_method is None:
         pass
     elif nav_method == 'proj':
@@ -59,7 +63,6 @@ def generate_push_closing(km, grounding_state, controlled_symbols,
 
     # PUSH CONSTRAINT GENERATION
     constraints = km.get_constraints_by_symbols(gm.free_symbols(geom_distance).union(controlled_symbols))
-    contact_constraints, in_contact = generate_contact_model(robot_cp, controlled_symbols, object_cp, contact_normal, gm.free_symbols(obj_pose))
     constraints.update(contact_constraints)
     # for x, n in enumerate('xyz'):
     #     constraints[f'zero tangent vel_{n}'] = Constraint((1 -  in_contact) * -1e3, 

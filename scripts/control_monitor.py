@@ -2,7 +2,6 @@
 import rospy
 import sys
 
-
 from argparse import ArgumentParser
 from torch.utils.tensorboard import SummaryWriter
 from multiprocessing import RLock
@@ -14,7 +13,7 @@ if __name__ == '__main__':
 	parser = ArgumentParser(description='Monitors a robot state topic and control topic and plots control vs state')
 	parser.add_argument('-o', '--out', default='control_monitor', help='Tensorboard log file name')
 
-	args = parser.parse_args([a for a in sys.args[1:] if ':=' not in a])
+	args = parser.parse_args([a for a in sys.argv[1:] if ':=' not in a])
 
 	writer = SummaryWriter(args.out)
 
