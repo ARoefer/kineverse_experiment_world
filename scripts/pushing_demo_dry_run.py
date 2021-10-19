@@ -154,8 +154,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Plans motions for closing doors and drawers in the IAI kitchen environment using various robots.')
     parser.add_argument('--robot', '-r', default='pr2', help='Name of the robot to use. Will look for package://ROBOT_description/robot/ROBOT.urdf')
     parser.add_argument('--omni', type=str2bool, default=True, help='To use an omnidirectional base or not.')
-    parser.add_argument('--nav', type=str, default='linear', help='Heuristic for navigating object geometry. [ cross |  linear | cubic ]')
-    parser.add_argument('--vis-plan', type=str, default='after', help='Visualize trajector while planning. [ during | after | none ]')
+    parser.add_argument('--nav', type=str, default='cross', help='Heuristic for navigating object geometry. [ cross |  linear | cubic ]')
+    parser.add_argument('--vis-plan', type=str, default='during', help='Visualize trajectory while planning. [ during | none ] (Huge overhead!)')
+    parser.add_argument('--real-time', type=str2bool, default=False, help='Limit the display of planning steps to match the actual control frequency.')
+    parser.add_argument('--dt', type=float, default=0.02, help='Size of time step.')
     parser.add_argument('--link', type=str, default=None, help='Link of the robot to use for actuation.')
     parser.add_argument('--camera', type=str, default=None, help='Camera link of the robot.')
 
@@ -348,7 +350,7 @@ if __name__ == '__main__':
                                        printed_exprs={})
 
         # RUN
-        int_factor = 0.02
+        int_factor = args.dt
         integrator.restart(f'{robot} Cartesian Goal Example')
         # print('\n'.join('{}: {}'.format(s, r) for s, r in integrator.integration_rules.items()))
         try:
@@ -356,7 +358,7 @@ if __name__ == '__main__':
             integrator.run(int_factor,
                            1200,
                            logging=False,
-                           real_time=False,
+                           real_time=args.real_time,
                            show_progress=True)
             total_dur.append((Time.now() - start).to_sec())
             n_iter.append(integrator.current_iteration + 1)
@@ -392,9 +394,9 @@ if __name__ == '__main__':
             # draw_recorders([rec_c], 0.5, 4, 2.5).savefig('{}/{}_sandbox_{}_plots.png'.format(plot_dir, robot, part))
             # draw_recorders([rec_b, rec_c] + [r for _, r in sorted(recs.items())], 1, 8, 4).savefig('{}/{}_sandbox_{}_constraints.png'.format(plot_dir, robot, part))
 
-        if args.vis_plan == 'after':
-            traj_vis.visualize(integrator.recorder.data, hz=50)
-            pass
+        # if args.vis_plan == 'after':
+        #     traj_vis.visualize(integrator.recorder.data, hz=50)
+        #     pass
 
         if rospy.is_shutdown():
           break
