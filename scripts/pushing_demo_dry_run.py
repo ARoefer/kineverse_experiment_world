@@ -112,7 +112,15 @@ start_poses = {
                'right_arm_4_joint': -0.3,
                'right_arm_5_joint': -0.7,
                'right_arm_6_joint': 0.01},
-              }
+    'fmm': {'panda_joint1': 0,
+            'panda_joint2': 0.7,
+            'panda_joint3': 0,
+            'panda_joint4': -2.2,
+            'panda_joint5': 0,
+            'panda_joint6': 2.2,
+            'panda_joint7': 0},
+}
+
 torque_limits = {
     'pr2': {'l_shoulder_pan_joint' : 30,
             'l_shoulder_lift_joint': 30,
@@ -168,6 +176,8 @@ if __name__ == '__main__':
         robot_link = args.link
     elif robot == 'pr2':
         robot_link = 'r_gripper_r_finger_tip_link'
+    elif robot == 'fmm':
+        robot_link = 'panda_hand'
     else:
         robot_link = 'gripper_link' # 'r_gripper_finger_link'
 
@@ -177,15 +187,20 @@ if __name__ == '__main__':
             camera_link = 'head_camera_rgb_optical_frame'
         elif args.robot == 'pr2':
             camera_link = 'head_mount_kinect_rgb_optical_frame'
+        elif args.robot == 'fmm':
+            camera_link = 'camera_color_optical_frame'
 
     plot_dir = res_pkg_path('package://kineverse/test/plots')
 
     # Loading of models
-    if robot != 'pr2':
-        with open(res_pkg_path('package://{r}_description/robots/{r}.urdf'.format(r=robot)), 'r') as urdf_file:
+    if robot == 'pr2':
+        with open(res_pkg_path('package://iai_pr2_description/robots/pr2_calibrated_with_ft2.xml'), 'r') as urdf_file:
+            urdf_str = hacky_urdf_parser_fix(urdf_file.read())
+    elif robot == 'fmm':
+        with open(res_pkg_path('package://fmm/robots/fmm.urdf'), 'r') as urdf_file:
             urdf_str = hacky_urdf_parser_fix(urdf_file.read())
     else:
-        with open(res_pkg_path('package://iai_pr2_description/robots/pr2_calibrated_with_ft2.xml'), 'r') as urdf_file:
+        with open(res_pkg_path('package://{r}_description/robots/{r}.urdf'.format(r=robot)), 'r') as urdf_file:
             urdf_str = hacky_urdf_parser_fix(urdf_file.read())
 
     with open(res_pkg_path('package://iai_kitchen/urdf_obj/IAI_kitchen.urdf'), 'r') as urdf_file:
@@ -292,7 +307,7 @@ if __name__ == '__main__':
 
         start_state = {s: 0.7 for s in gm.free_symbols(obj.pose)}
 
-        active_parts_to_avoid = [p for p in km.get_active_geometry_raw(gm.free_symbols(obj.pose)).keys() if p != part_path]
+        active_parts_to_avoid = None # [p for p in km.get_active_geometry_raw(gm.free_symbols(obj.pose)).keys() if p != part_path]
 
 
         weights = None

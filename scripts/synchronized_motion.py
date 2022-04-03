@@ -75,6 +75,9 @@ if __name__ == '__main__':
         robot_urdf = load_urdf_file('package://hsr_description/robots/hsrb4s.obj.urdf')
     elif robot_type.lower() == 'fetch':
         robot_urdf = load_urdf_file('package://fetch_description/robots/fetch.urdf')
+    elif robot_type.lower() == 'fmm':
+        robot_urdf = load_urdf_file('package://fmm/robots/fmm.urdf')
+        rospy.set_param('~eef', rospy.get_param('~eef', 'panda_hand_tcp'))
     else:
         print(f'Unknown robot {robot_type}')
         exit(1)
@@ -154,16 +157,29 @@ if __name__ == '__main__':
         start_pose, \
         eef, \
         blacklist = generic_setup(km, robot_path, rospy.get_param('~eef', 'gripper_link'))
+        if robot_type.lower() == 'fmm':
+            start_pose = {'panda_joint1': 0,
+                          'panda_joint2': 0.7,
+                          'panda_joint3': 0,
+                          'panda_joint4': -2.2,
+                          'panda_joint5': 0,
+                          'panda_joint6': 2.2,
+                          'panda_joint7': 0}
+            start_pose = {gm.Position(Path(f'{robot_path}/{n}')): v for n, v in start_pose.items()}       
 
     collision_world = km.get_active_geometry(gm.free_symbols(handle.pose).union(gm.free_symbols(eef.pose)))
 
     # Init step
     grasp_in_handle = gm.dot(gm.translation3(0.04, 0, 0), gm.rotation3_rpy(math.pi * 0.5, 0, math.pi))
+    if robot_type.lower() == 'fmm':
+        grasp_in_handle = gm.dot(gm.translation3(0.05, 0, 0), gm.rotation3_rpy(math.pi * -0.5, math.pi * 0, math.pi * 0.5))
+    # grasp_in_handle = gm.dot(gm.translation3(0.04, 0, 0), gm.rotation3_rpy(math.pi * 0.5, 0, 0))
     goal_pose       = gm.dot(handle.pose, grasp_in_handle)
     goal_0_pose     = gm.subs(goal_pose, {s: 0 for s in gm.free_symbols(goal_pose)})
 
     start_state = {s: 0 for s in gm.free_symbols(collision_world)}
     start_state.update(start_pose)
+    print('\n  '.join(f'{p}: {v}' for p, v in start_state.items()))
     ik_err, robot_start_state = ik_solve_one_shot(km, eef.pose, start_state, goal_0_pose)
 
     start_state.update({s: 0 for s in gm.free_symbols(handle.pose)})
@@ -176,7 +192,7 @@ if __name__ == '__main__':
     vis.render('ik_solution')
 
     print(f'IK error: {ik_err}')
-    
+
     def gen_dv_cvs(km, constraints, controlled_symbols):
         cvs, constraints = generate_controlled_values(constraints, controlled_symbols)
         cvs = depth_weight_controlled_values(km, cvs, exp_factor=1.02)
@@ -200,7 +216,9 @@ if __name__ == '__main__':
                          follower_goal_constraints, 
                          f_gen_follower_cvs=gen_dv_cvs,
                          controls_blacklist=blacklist,
-                         transition_overrides=integration_rules
+                         transition_overrides=integration_rules,
+                        #  t_follower=GQPB,
+                        #  visualizer=vis,
                          )
 
     # exit()
@@ -215,6 +233,9 @@ if __name__ == '__main__':
     visualize = rospy.get_param('~vis', False)
     
     for x in tqdm(range(500), desc='Generating motion...'):
+        if rospy.is_shutdown():
+            break
+
         try:
             start = rospy.Time.now()
             cmd = solver.get_cmd(start_state.copy(), deltaT=start_state[sym_dt])

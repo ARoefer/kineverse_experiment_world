@@ -37,7 +37,12 @@ def generate_push_closing(km, grounding_state, controlled_symbols,
     neutral_tangent = gm.cross(contact_grad, contact_normal)
     active_tangent  = gm.cross(neutral_tangent, contact_normal)
 
-    contact_constraints, in_contact = generate_contact_model(robot_cp, controlled_symbols, object_cp, contact_normal, gm.free_symbols(obj_pose))
+    contact_constraints, in_contact = generate_contact_model(robot_cp,
+                                                             controlled_symbols,
+                                                             object_cp,
+                                                             contact_normal,
+                                                             gm.free_symbols(obj_pose),
+                                                             dist_threshold=0.03)
     
     target_pos = None
     if nav_method == 'linear':
@@ -118,7 +123,8 @@ class PushingController(object):
                                                  actuated_object_path,
                                                  target_object_path,
                                                  navigation_method,
-                                                 static_symbols=static_symbols)
+                                                 static_symbols=static_symbols,
+                                                 cp_offset=-0.02)
 
         start_state.update({s: 0.0 for s in gm.free_symbols(coll_world)})
 
