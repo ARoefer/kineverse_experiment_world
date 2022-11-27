@@ -232,6 +232,9 @@ if __name__ == '__main__':
 
     visualize = rospy.get_param('~vis', False)
     
+    trajectory = {s: [] for s in robot_start_state}
+    print(trajectory.keys())
+
     for x in tqdm(range(500), desc='Generating motion...'):
         if rospy.is_shutdown():
             break
@@ -246,6 +249,8 @@ if __name__ == '__main__':
 
         for s, v in zip(t_symbols, t_function.call2([start_state[s] if s not in cmd else cmd[s] for s in t_params])):
             start_state[s] = v
+            if s in trajectory:
+                trajectory[s].append(v[0])
         
         if visualize:
             collision_world.update_world(start_state)
@@ -255,8 +260,12 @@ if __name__ == '__main__':
 
         if solver.equilibrium_reached():
             break
-
         # integrator.run(0.02, 500, logging=False, real_time=True)
+
+    for s, d in sorted([(str(s), t) for s, t in trajectory.items()]):
+        if len(d) > 0:
+            a = np.asarray(d)
+            print(f'{s} ({len(a)}):\n  Min: {a.min()}  Max: {a.max()}\n  Mean: {a.mean()}  Median: {np.median(a)}')
 
     times = np.array(times)
     print(f'Timing stats:\nMean: {times.mean()} s\nSD: {times.std()} s\nMin: {times.min()} s\nMax: {times.max()} s')
