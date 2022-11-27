@@ -164,8 +164,10 @@ if __name__ == '__main__':
                           'panda_joint4': -2.2,
                           'panda_joint5': 0,
                           'panda_joint6': 2.2,
-                          'panda_joint7': 0}
-            start_pose = {gm.Position(Path(f'{robot_path}/{n}')): v for n, v in start_pose.items()}       
+                          'panda_joint7': 0,
+                          'ewellix_lift_top_joint': 0.1678160927155266}
+            start_pose = {gm.Position(Path(f'{robot_path}/{n}')): v for n, v in start_pose.items()}
+            blacklist.add(gm.Velocity(Path(f'{robot_path}/ewellix_lift_top_joint')))
 
     collision_world = km.get_active_geometry(gm.free_symbols(handle.pose).union(gm.free_symbols(eef.pose)))
 
