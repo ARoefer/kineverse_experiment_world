@@ -33,7 +33,7 @@ from kineverse.time_wrapper                        import Time
 
 from kineverse.urdf_fix                            import urdf_filler, \
                                                           hacky_urdf_parser_fix
-from kineverse.utils                               import res_pkg_path
+from kineverse.ros                                 import res_pkg_path
 from kineverse.visualization.bpb_visualizer        import ROSBPBVisualizer
 from kineverse.visualization.plotting              import draw_recorders,  \
                                                           split_recorders, \
