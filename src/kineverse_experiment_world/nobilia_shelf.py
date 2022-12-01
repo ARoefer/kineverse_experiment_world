@@ -1,13 +1,11 @@
 import math
+import kineverse as kv
 
-import kineverse.gradients.gradient_math as gm
+from kineverse import gm
 
 from collections import namedtuple
 from kineverse.model.frames         import Frame
-from kineverse.model.paths          import Path, CPath
-from kineverse.model.geometry_model import ArticulatedObject, \
-                                           Box, Mesh, Cylinder, Sphere, \
-                                           RigidBody, Constraint
+from kineverse.model.paths          import Path
 from kineverse.operations.basic_operations import CreateValue, \
                                                   ExecFunction
 from kineverse.operations.urdf_operations  import RevoluteJoint
@@ -15,7 +13,7 @@ from kineverse.operations.urdf_operations  import RevoluteJoint
 
 NobiliaDebug = namedtuple('NobiliaDebug', ['poses', 'vectors', 'expressions', 'tuning_params'])
 
-class MarkedArticulatedObject(ArticulatedObject):
+class MarkedArticulatedObject(kv.ArticulatedObject):
     def __init__(self, name):
         super(MarkedArticulatedObject, self).__init__(name)
         self.markers = {}
@@ -57,8 +55,8 @@ def inner_triangle_angle(a, b, c):
   return gm.acos((a**2 + b**2 - c**2) / (2 * a * b))
 
 
-def create_nobilia_shelf(km, prefix, origin_pose=gm.eye(4), parent_path=Path('world')):
-    km.apply_operation(f'create {prefix}', ExecFunction(prefix, MarkedArticulatedObject, str(prefix)))
+def create_nobilia_shelf(km, prefix, origin_pose=gm.eye(4), parent_path=kv.Path('world')):
+    km.apply_operation(f'create {prefix}', kv.ExecFunction(prefix, MarkedArticulatedObject, str(prefix)))
 
     shelf_height = 0.72
     shelf_width  = 0.6
@@ -67,24 +65,24 @@ def create_nobilia_shelf(km, prefix, origin_pose=gm.eye(4), parent_path=Path('wo
     wall_width = 0.016
 
     l_prefix = prefix + ('links',)
-    geom_body_wall_l = Box(l_prefix + ('body',), gm.translation3(0,  0.5 * (shelf_width - wall_width), 0),
-                                                 gm.vector3(shelf_body_depth, wall_width, shelf_height))
-    geom_body_wall_r = Box(l_prefix + ('body',), gm.translation3(0, -0.5 * (shelf_width - wall_width), 0),
-                                                 gm.vector3(shelf_body_depth, wall_width, shelf_height))
+    geom_body_wall_l = kv.Box(l_prefix + ('body',), gm.translation3(0,  0.5 * (shelf_width - wall_width), 0),
+                                                    gm.vector3(shelf_body_depth, wall_width, shelf_height))
+    geom_body_wall_r = kv.Box(l_prefix + ('body',), gm.translation3(0, -0.5 * (shelf_width - wall_width), 0),
+                                                    gm.vector3(shelf_body_depth, wall_width, shelf_height))
     
-    geom_body_ceiling = Box(l_prefix + ('body',), gm.translation3(0, 0, 0.5 * (shelf_height - wall_width)),
-                                                  gm.vector3(shelf_body_depth, shelf_width - wall_width, wall_width))
-    geom_body_floor   = Box(l_prefix + ('body',), gm.translation3(0, 0, -0.5 * (shelf_height - wall_width)),
-                                                  gm.vector3(shelf_body_depth, shelf_width - wall_width, wall_width))
+    geom_body_ceiling = kv.Box(l_prefix + ('body',), gm.translation3(0, 0, 0.5 * (shelf_height - wall_width)),
+                                                     gm.vector3(shelf_body_depth, shelf_width - wall_width, wall_width))
+    geom_body_floor   = kv.Box(l_prefix + ('body',), gm.translation3(0, 0, -0.5 * (shelf_height - wall_width)),
+                                                     gm.vector3(shelf_body_depth, shelf_width - wall_width, wall_width))
 
-    geom_body_shelf_1 = Box(l_prefix + ('body',), gm.translation3(0.02, 0, -0.2 * (shelf_height - wall_width)),
-                                                  gm.vector3(shelf_body_depth - 0.04, shelf_width - wall_width, wall_width))
+    geom_body_shelf_1 = kv.Box(l_prefix + ('body',), gm.translation3(0.02, 0, -0.2 * (shelf_height - wall_width)),
+                                                     gm.vector3(shelf_body_depth - 0.04, shelf_width - wall_width, wall_width))
 
-    geom_body_shelf_2 = Box(l_prefix + ('body',), gm.translation3(0.02, 0, 0.2 * (shelf_height - wall_width)),
-                                                  gm.vector3(shelf_body_depth - 0.04, shelf_width - wall_width, wall_width))
+    geom_body_shelf_2 = kv.Box(l_prefix + ('body',), gm.translation3(0.02, 0, 0.2 * (shelf_height - wall_width)),
+                                                     gm.vector3(shelf_body_depth - 0.04, shelf_width - wall_width, wall_width))
 
-    geom_body_back    = Box(l_prefix + ('body',), gm.translation3(0.5 * (shelf_body_depth - 0.005), 0, 0),
-                                                  gm.vector3(0.005, shelf_width - 2 * wall_width, shelf_height - 2 * wall_width))
+    geom_body_back    = kv.Box(l_prefix + ('body',), gm.translation3(0.5 * (shelf_body_depth - 0.005), 0, 0),
+                                                     gm.vector3(0.005, shelf_width - 2 * wall_width, shelf_height - 2 * wall_width))
 
     shelf_geom = [geom_body_wall_l,
                   geom_body_wall_r,
@@ -94,24 +92,24 @@ def create_nobilia_shelf(km, prefix, origin_pose=gm.eye(4), parent_path=Path('wo
                   geom_body_shelf_1,
                   geom_body_shelf_2]
 
-    rb_body = RigidBody(parent_path, origin_pose, geometry=dict(enumerate(shelf_geom)), 
-                                                  collision=dict(enumerate(shelf_geom)))
+    rb_body = kv.RigidBody(parent_path, origin_pose, geometry=dict(enumerate(shelf_geom)), 
+                                                     collision=dict(enumerate(shelf_geom)))
 
-    geom_panel_top = Box(l_prefix + ('panel_top',), gm.eye(4), 
-                                                    gm.vector3(0.357, 0.595, wall_width))
-    geom_panel_bottom = Box(l_prefix + ('panel_bottom',), gm.eye(4), 
-                                                          gm.vector3(0.357, 0.595, wall_width))
+    geom_panel_top = kv.Box(l_prefix + ('panel_top',), gm.eye(4), 
+                                                       gm.vector3(0.357, 0.595, wall_width))
+    geom_panel_bottom = kv.Box(l_prefix + ('panel_bottom',), gm.eye(4), 
+                                                             gm.vector3(0.357, 0.595, wall_width))
     
     handle_width    = 0.16
     handle_depth    = 0.05
     handle_diameter = 0.012
 
-    geom_handle_r = Box(l_prefix + ('handle',), gm.translation3(0.5 * handle_depth,  0.5 * (handle_width - handle_diameter), 0), 
-                                                gm.vector3(handle_depth, handle_diameter, handle_diameter))
-    geom_handle_l = Box(l_prefix + ('handle',), gm.translation3(0.5 * handle_depth, -0.5 * (handle_width - handle_diameter), 0), 
-                                                gm.vector3(handle_depth, handle_diameter, handle_diameter))
-    geom_handle_bar = Box(l_prefix + ('handle',), gm.translation3(handle_depth - 0.5 * handle_diameter, 0, 0), 
-                                                  gm.vector3(handle_diameter, handle_width - handle_diameter, handle_diameter))
+    geom_handle_r = kv.Box(l_prefix + ('handle',), gm.translation3(0.5 * handle_depth,  0.5 * (handle_width - handle_diameter), 0), 
+                                                   gm.vector3(handle_depth, handle_diameter, handle_diameter))
+    geom_handle_l = kv.Box(l_prefix + ('handle',), gm.translation3(0.5 * handle_depth, -0.5 * (handle_width - handle_diameter), 0), 
+                                                   gm.vector3(handle_depth, handle_diameter, handle_diameter))
+    geom_handle_bar = kv.Box(l_prefix + ('handle',), gm.translation3(handle_depth - 0.5 * handle_diameter, 0, 0), 
+                                                     gm.vector3(handle_diameter, handle_width - handle_diameter, handle_diameter))
 
     handle_geom = [geom_handle_l, geom_handle_r, geom_handle_bar]
  
@@ -149,8 +147,10 @@ def create_nobilia_shelf(km, prefix, origin_pose=gm.eye(4), parent_path=Path('wo
     bottom_panel_marker_in_front_hinge = gm.translation3(0.27271013,                           0,  0.00489996)
 
     # Top hinge - Data taken from observation
-    body_marker_in_body = gm.dot(gm.rotation3_axis_angle(gm.vector3(0, 0, 1), math.pi), 
-                                 gm.translation3(0.5 * shelf_body_depth - 0.062, -0.5 * shelf_width + 0.078, 0.5 * shelf_height))
+    body_marker_in_body      = gm.dot(gm.rotation3_axis_angle(gm.vector3(0, 0, 1), math.pi), 
+                                      gm.translation3(0.5 * shelf_body_depth - 0.062, -0.5 * shelf_width + 0.078, 0.5 * shelf_height))
+    body_side_marker_in_body = gm.dot(gm.rotation3_axis_angle(gm.vector3(0, 0, 1), math.pi), 
+                                      gm.translation3(0.5 * shelf_body_depth - 0.062, -0.5 * shelf_width + 0.078, 0.5 * shelf_height))
     top_panel_marker_in_top_panel = gm.translation3( geom_panel_top.scale[0] * 0.5 - 0.062,
                                                     -geom_panel_top.scale[1] * 0.5 + 0.062,
                                                      geom_panel_top.scale[2] * 0.5)
@@ -210,10 +210,10 @@ def create_nobilia_shelf(km, prefix, origin_pose=gm.eye(4), parent_path=Path('wo
 
     gamma = gamma_1 + gamma_2
 
-    rb_panel_top = RigidBody(l_prefix + ('body',), gm.dot(rb_body.pose, top_panel_in_body),
-                                                   top_panel_in_body,
-                                                   geometry={0: geom_panel_top},
-                                                   collision={0: geom_panel_top})
+    rb_panel_top = kv.RigidBody(l_prefix + ('body',), gm.dot(rb_body.pose, top_panel_in_body),
+                                                      top_panel_in_body,
+                                                      geometry={0: geom_panel_top},
+                                                      collision={0: geom_panel_top})
 
     # old offset: 0.5 * geom_panel_top.scale[2] + 0.03
     tf_bottom_panel = gm.dot(front_hinge_in_top_panel,
@@ -221,49 +221,53 @@ def create_nobilia_shelf(km, prefix, origin_pose=gm.eye(4), parent_path=Path('wo
                              gm.rotation3_axis_angle(gm.vector3(0, -1, 0), gamma),
                              bottom_panel_in_front_hinge)
 
-    rb_panel_bottom = RigidBody(l_prefix + ('panel_top',), gm.dot(rb_panel_top.pose, tf_bottom_panel),
-                                                           tf_bottom_panel,
-                                                           geometry={0: geom_panel_bottom},
-                                                           collision={0: geom_panel_bottom})
+    rb_panel_bottom = kv.RigidBody(l_prefix + ('panel_top',), gm.dot(rb_panel_top.pose, tf_bottom_panel),
+                                                              tf_bottom_panel,
+                                                              geometry={0: geom_panel_bottom},
+                                                              collision={0: geom_panel_bottom})
 
     handle_transform = gm.dot(gm.translation3(geom_panel_bottom.scale[0] * 0.5 - 0.08, 0, 0.5 * wall_width),
                               gm.rotation3_axis_angle(gm.vector3(0, 1, 0), -math.pi * 0.5))
-    rb_handle       = RigidBody(l_prefix + ('panel_bottom',), gm.dot(rb_panel_bottom.pose, handle_transform),
-                                                              handle_transform,
-                                                              geometry={x: g for x, g in enumerate(handle_geom)},
-                                                              collision={x: g for x, g in enumerate(handle_geom)})
+    rb_handle       = kv.RigidBody(l_prefix + ('panel_bottom',), gm.dot(rb_panel_bottom.pose, handle_transform),
+                                                                 handle_transform,
+                                                                 geometry={x: g for x, g in enumerate(handle_geom)},
+                                                                 collision={x: g for x, g in enumerate(handle_geom)})
     # Only debugging
     point_c = gm.dot(rb_panel_bottom.pose, point_c_in_bottom_panel)
     vec_b_to_c = point_c - point_b
 
-    km.apply_operation(f'create {prefix}/links/body', CreateValue(rb_panel_top.parent, rb_body))
-    km.apply_operation(f'create {prefix}/links/panel_top', CreateValue(rb_panel_bottom.parent, rb_panel_top))
-    km.apply_operation(f'create {prefix}/links/panel_bottom', CreateValue(l_prefix + ('panel_bottom',) , rb_panel_bottom))
-    km.apply_operation(f'create {prefix}/links/handle', CreateValue(l_prefix + ('handle',) , rb_handle))
-    km.apply_operation(f'create {prefix}/joints/hinge', ExecFunction(prefix + Path('joints/hinge'), 
+    km.apply_operation(f'create {prefix}/links/body', kv.CreateValue(rb_panel_top.parent, rb_body))
+    km.apply_operation(f'create {prefix}/links/panel_top', kv.CreateValue(rb_panel_bottom.parent, rb_panel_top))
+    km.apply_operation(f'create {prefix}/links/panel_bottom', kv.CreateValue(l_prefix + ('panel_bottom',) , rb_panel_bottom))
+    km.apply_operation(f'create {prefix}/links/handle', kv.CreateValue(l_prefix + ('handle',) , rb_handle))
+    km.apply_operation(f'create {prefix}/joints/hinge', kv.ExecFunction(prefix + kv.Path('joints/hinge'), 
                                                                      RevoluteJoint,
-                                                                     CPath(rb_panel_top.parent),
-                                                                     CPath(rb_panel_bottom.parent),
+                                                                     kv.CPath(rb_panel_top.parent),
+                                                                     kv.CPath(rb_panel_bottom.parent),
                                                                      opening_position,
                                                                      gm.vector3(0, 1, 0),
                                                                      gm.eye(4),
                                                                      0,
                                                                      1.84,
-                                                                     **{f'{opening_position}': Constraint(0 - opening_position,
+                                                                     **{f'{opening_position}': kv.Constraint(0 - opening_position,
                                                                                                           1.84 - opening_position,
                                                                                                           opening_position),
-                                                                        f'{gm.DiffSymbol(opening_position)}': Constraint(-0.25, 0.25, gm.DiffSymbol(opening_position))}))
+                                                                        f'{gm.DiffSymbol(opening_position)}': kv.Constraint(-0.25, 0.25, gm.DiffSymbol(opening_position))}))
     m_prefix = prefix + ('markers',)
-    km.apply_operation(f'create {prefix}/markers/body',         ExecFunction(m_prefix + ('body',), Frame,
-                                                                                                   CPath(l_prefix + ('body', )),
+    km.apply_operation(f'create {prefix}/markers/body',         kv.ExecFunction(m_prefix + ('body',), kv.Frame,
+                                                                                                   kv.CPath(l_prefix + ('body', )),
                                                                                                    gm.dot(rb_body.pose, body_marker_in_body), 
                                                                                                    body_marker_in_body))
-    km.apply_operation(f'create {prefix}/markers/top_panel',    ExecFunction(m_prefix + ('top_panel',), Frame, 
-                                                                                                        CPath(l_prefix + ('panel_top', )),
+    km.apply_operation(f'create {prefix}/markers/body_side',    kv.ExecFunction(m_prefix + ('body_side',), kv.Frame,
+                                                                                                   kv.CPath(l_prefix + ('body', )),
+                                                                                                   gm.dot(rb_body.pose, body_side_marker_in_body), 
+                                                                                                   body_side_marker_in_body))                                                                                                   
+    km.apply_operation(f'create {prefix}/markers/top_panel',    kv.ExecFunction(m_prefix + ('top_panel',), kv.Frame, 
+                                                                                                        kv.CPath(l_prefix + ('panel_top', )),
                                                                                                         gm.dot(rb_panel_top.pose, top_panel_marker_in_top_panel), 
                                                                                                         top_panel_marker_in_top_panel))
-    km.apply_operation(f'create {prefix}/markers/bottom_panel', ExecFunction(m_prefix + ('bottom_panel',), Frame, 
-                                                                                                           CPath(l_prefix + ('panel_bottom', )),
+    km.apply_operation(f'create {prefix}/markers/bottom_panel', kv.ExecFunction(m_prefix + ('bottom_panel',), kv.Frame, 
+                                                                                                           kv.CPath(l_prefix + ('panel_bottom', )),
                                                                                                            gm.dot(rb_panel_bottom.pose, bottom_panel_marker_in_bottom_panel),
                                                                                                            bottom_panel_marker_in_bottom_panel))
 
