@@ -43,6 +43,7 @@ class ROSQPEManager(object):
                     self.observation_aliases[alias] = path
 
         self.str_controls = {str(s) for s in self.tracker.get_controls()}
+        print(self.str_controls)
 
         self.vis = kv_ros.ROSVisualizer('~vis', reference_frame)
 
@@ -61,7 +62,6 @@ class ROSQPEManager(object):
         self.timer = rospy.Timer(rospy.Duration(1 / update_freq), self.cb_update)
 
     def cb_obs(self, transform_stamped_array_msg):
-        print('OBS')
         ref_frames = {}
         
         num_valid_obs = 0
