@@ -45,7 +45,8 @@ class ROSOpeningBehavior(object):
                        controlled_symbols, cam_path=None,
                        weights=None, resting_pose=None, visualizer=None, 
                        monitoring_threshold=0.7, acceptance_threshold=0.8,
-                       control_mode='vel'):
+                       control_mode='vel',
+                       gripper_open_command=0.1):
         self.km = km
         self.robot_command_processor = robot_command_processor
         self.gripper_wrapper = gripper_wrapper
@@ -53,6 +54,7 @@ class ROSOpeningBehavior(object):
         self.robot_prefix    = robot_prefix
         self.eef_path        = eef_path
         self.cam_path        = cam_path
+        self.gripper_open_command = gripper_open_command
 
         self.visualizer         = visualizer
         if weights is None:
@@ -183,7 +185,7 @@ class ROSOpeningBehavior(object):
                 #    instantiate 6d controller
                 #    switch to "grasping"
                 if self.controller is None:
-                    self.gripper_wrapper.sync_set_gripper_position(0.07)
+                    self.gripper_wrapper.sync_set_gripper_position(self.gripper_open_command)
                     self.controller = self._idle_controller
 
                 with self._state_lock:
@@ -191,7 +193,7 @@ class ROSOpeningBehavior(object):
                         if s in self._state and self._state[s] < self._var_upper_bound[s] * self.monitoring_threshold: # Some thing in the scene is closed
                             self._current_target = p
                             print(f'New target is {self._current_target}')
-                            self.gripper_wrapper.sync_set_gripper_position(0.07)
+                            self.gripper_wrapper.sync_set_gripper_position(self.gripper_open_command)
                             self._last_controller_update = None
                             print('Gripper is open. Proceeding to grasp...')
                             draw_fn = None
@@ -214,7 +216,7 @@ class ROSOpeningBehavior(object):
                                                                  self._grasp_poses[p],
                                                                  self.controlled_symbols,
                                                                  self.weights,
-                                                                 draw_fn)
+                                                                 draw_fn=draw_fn)
 
 
                             self._phase = 'grasping'
@@ -228,7 +230,7 @@ class ROSOpeningBehavior(object):
                 #    instantiate cascading controller
                 #    switch to "opening"
                 # if there is no more command but the goal error is too great -> "homing"
-                if self.controller.equilibrium_reached(0.03, -0.03):
+                if self.controller.equilibrium_reached(0.01, -0.01):
                     if self.controller.current_error() > 0.01:
                         self.controller = self._idle_controller
                         self._phase = 'homing'
@@ -236,6 +238,7 @@ class ROSOpeningBehavior(object):
                     else:
                         print('Closing gripper...')
                         self.gripper_wrapper.sync_set_gripper_position(0, 80)
+                        rospy.sleep(1.0)
                         print('Generating opening controller')
                         
                         eef = self.km.get_data(self.eef_path)
@@ -339,12 +342,12 @@ class ROSOpeningBehavior(object):
                                                          self.controlled_symbols,
                                                          self.weights)
 
-                    self.gripper_wrapper.sync_set_gripper_position(0.07)
+                    self.gripper_wrapper.sync_set_gripper_position(self.gripper_open_command)
                     self._last_controller_update = None
                     self._phase = 'retracting'
                     print(f'Now entering {self._phase} state')
                 else:
-                    remainder = (1 / 3) - (rospy.Time.now() - loop_start).to_sec()
+                    remainder = (1 / 6) - (rospy.Time.now() - loop_start).to_sec()
                     if remainder > 0:
                         rospy.sleep(remainder)
 
@@ -360,7 +363,7 @@ class ROSOpeningBehavior(object):
                 # Wait for idle controller to have somewhat low error
                 # -> switch to "idle"
                 if self.controller is None:
-                    self.gripper_wrapper.sync_set_gripper_position(0.07)
+                    self.gripper_wrapper.sync_set_gripper_position(self.gripper_open_command)
                     self.controller = self._idle_controller
                     continue
 
