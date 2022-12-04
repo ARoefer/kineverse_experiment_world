@@ -148,9 +148,9 @@ def create_nobilia_shelf(km, prefix, origin_pose=gm.eye(4), parent_path=kv.Path(
 
     # Top hinge - Data taken from observation
     body_marker_in_body      = gm.dot(gm.rotation3_axis_angle(gm.vector3(0, 0, 1), math.pi), 
-                                      gm.translation3(0.5 * shelf_body_depth - 0.062, -0.5 * shelf_width + 0.078, 0.5 * shelf_height))
-    body_side_marker_in_body = gm.dot(gm.rotation3_axis_angle(gm.vector3(0, 0, 1), math.pi), 
-                                      gm.translation3(0.5 * shelf_body_depth - 0.062, -0.5 * shelf_width + 0.078, 0.5 * shelf_height))
+                                      gm.translation3( 0.5 * shelf_body_depth - 0.062, -0.5 * shelf_width + 0.078, 0.5 * shelf_height))
+    body_side_marker_in_body = gm.dot(gm.translation3(-0.5 * shelf_body_depth + 0.062,  0.5 * shelf_width, 0.5 * shelf_height - 0.062),
+                                      gm.rotation3_rpy(math.pi * 0.5, 0, math.pi * 1.0))
     top_panel_marker_in_top_panel = gm.translation3( geom_panel_top.scale[0] * 0.5 - 0.062,
                                                     -geom_panel_top.scale[1] * 0.5 + 0.062,
                                                      geom_panel_top.scale[2] * 0.5)
