@@ -2,6 +2,7 @@ import rospy
 import kineverse.gradients.gradient_math as gm
 import math
 import threading
+import traceback
 
 from multiprocessing import RLock
 
@@ -104,6 +105,9 @@ class ROSPushingBehavior(object):
                     rospy.sleep(0.01)
                     continue
                 state_count = self._robot_state_update_count
+
+            if not self.robot_command_processor.robot_is_fine:
+                rospy.signal_shutdown('Robot fault')
 
             if self.controller is not None:
                 now = rospy.Time.now()

@@ -99,7 +99,7 @@ class ROSOpeningBehavior(object):
         self._kys = False
         self._behavior_thread = threading.Thread(target=self.behavior_update)
         self._behavior_thread.start()
-
+        self._external_zero_msg = self._build_external_command({gm.DiffSymbol(s): 0 for s in self._target_map.keys()})
 
     def _build_ext_symbol_map(self, km, ext_paths):
         # total_ext_symbols = set()
@@ -145,6 +145,12 @@ class ROSOpeningBehavior(object):
         print('Monitored symbols are:\n  {}'.format('\n  '.join(str(s) for s in self._target_map.keys())))
 
 
+    def _build_external_command(self, command, now=None):
+        ext_msg = ValueMapMsg()
+        ext_msg.header.stamp = now if now is not None else rospy.Time.now()
+        ext_msg.symbol, ext_msg.value = zip(*[(str(s), v) for s, v in command.items()])
+        return ext_msg
+
     def behavior_update(self):
         state_count = 0
 
@@ -156,6 +162,9 @@ class ROSOpeningBehavior(object):
                     rospy.sleep(0.01)
                     continue
                 state_count = self._robot_state_update_count
+
+            if not self.robot_command_processor.robot_is_fine:
+                rospy.signal_shutdown('Robot fault')
 
             if self.controller is not None:
                 now = rospy.Time.now()
@@ -171,10 +180,9 @@ class ROSOpeningBehavior(object):
                 self._last_controller_update = now
 
             # Lets not confuse the tracker
-            if self._phase != 'opening' and self._last_external_cmd_msg is not None: 
+            if self._phase != 'opening': 
                 # Ensure that velocities are assumed to be 0 when not operating anything
-                self._last_external_cmd_msg.value = [0]*len(self._last_external_cmd_msg.value)
-                self.pub_external_command.publish(self._last_external_cmd_msg)
+                self.pub_external_command.publish(self._external_zero_msg)
                 self._last_external_cmd_msg = None
 
             if   self._phase == 'idle':
@@ -307,9 +315,7 @@ class ROSOpeningBehavior(object):
                 # self.visualizer.render('world state')
 
                 external_command = {s: v for s, v in command.items() if s not in self.controlled_symbols}
-                ext_msg = ValueMapMsg()
-                ext_msg.header.stamp = now
-                ext_msg.symbol, ext_msg.value = zip(*[(str(s), v) for s, v in external_command.items()])
+                ext_msg = self._build_external_command(external_command, now=now)
                 self.pub_external_command.publish(ext_msg)
                 self._last_external_cmd_msg = ext_msg
 
@@ -347,7 +353,7 @@ class ROSOpeningBehavior(object):
                     self._phase = 'retracting'
                     print(f'Now entering {self._phase} state')
                 else:
-                    remainder = (1 / 6) - (rospy.Time.now() - loop_start).to_sec()
+                    remainder = (1 / 20) - (rospy.Time.now() - loop_start).to_sec()
                     if remainder > 0:
                         rospy.sleep(remainder)
 
