@@ -27,12 +27,14 @@ class PR2VelCommandProcessor(RobotCommandProcessor):
                        base_topic=None,
                        base_symbols=None,
                        base_watchdog=rospy.Duration(0.4),
-                       reference_frame='odom'):
+                       reference_frame='odom',
+                       error_function=None):
         self.control_alias = {s: str(Path(gm.erase_type(s))[-1]) for s in joint_vel_symbols}
         self._robot_cmd_msg      = JointStateMsg()
         self._robot_cmd_msg.name = list(self.control_alias.keys())
         self._state_cb = None
         self.robot_prefix = robot_prefix
+        self._error_function = error_function
 
         if base_symbols is not None:
             self.base_aliases     = base_symbols
@@ -58,7 +60,9 @@ class PR2VelCommandProcessor(RobotCommandProcessor):
                 if self._base_last_cmd_stamp is not None and (now - self._base_last_cmd_stamp) < watchdog_timeout:
                     self.pub_base_command.publish(self._base_cmd_msg)
                 rospy.sleep(0.01)
-
+    @property
+    def robot_is_fine(self):
+        return not self._error_function() if self._error_function is not None else True
 
     def send_command(self, cmd):
         self._robot_cmd_msg.name, self._robot_cmd_msg.velocity = zip(*[(self.control_alias[s], v) for s, v in cmd.items()
@@ -68,7 +72,7 @@ class PR2VelCommandProcessor(RobotCommandProcessor):
                self.base_aliases.yv in cmd and \
                self.base_aliases.av in cmd:
                 try:
-                    trans = self.tf_buffer.lookup_transform('base_footprint',
+                    trans = self.tf_buffer.lookup_transform('base_link',
                                                             self.reference_frame,
                                                             rospy.Time(0))
                     rotation = trans.transform.rotation
@@ -85,7 +89,7 @@ class PR2VelCommandProcessor(RobotCommandProcessor):
                         self._base_cmd_msg.angular.z = cmd[self.base_aliases.av]
                         self._base_last_cmd_stamp = rospy.Time.now()
                 except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
-                    print(f'Exception raised while looking up {self.reference_frame} -> base_footprint:\n{e}')
+                    print(f'Exception raised while looking up {self.reference_frame} -> base_link:\n{e}')
                     return
 
         self.pub_joint_command.publish(self._robot_cmd_msg)
@@ -107,7 +111,7 @@ class PR2VelCommandProcessor(RobotCommandProcessor):
         if self.base_aliases is not None:
             try:
                 trans = self.tf_buffer.lookup_transform(self.reference_frame,
-                                                        'base_footprint',
+                                                        'base_link',
                                                         rospy.Time(0))
                 state_update[self.base_aliases.ap] = math.acos(trans.transform.rotation.w) * 2
                 state_update[self.base_aliases.xp] = trans.transform.translation.x
@@ -116,7 +120,7 @@ class PR2VelCommandProcessor(RobotCommandProcessor):
                 state_update[self.base_aliases.xv] = 0
                 state_update[self.base_aliases.yv] = 0
             except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
-                print(f'Exception raised while looking up {self.reference_frame} -> base_footprint:\n{e}')
+                print(f'Exception raised while looking up {self.reference_frame} -> base_link:\n{e}')
                 return
 
         self._state_cb(state_update)

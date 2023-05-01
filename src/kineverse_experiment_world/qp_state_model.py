@@ -1,13 +1,15 @@
-import numpy  as np
-import pandas as pd
+import kineverse        as kv
+import kineverse.motion as kvm
+import numpy            as np
+import pandas           as pd
 
-import kineverse.gradients.gradient_math as gm
+from kineverse import gm
 
-from kineverse.model.paths import Path
-from kineverse.motion.min_qp_builder import TypedQPBuilder as TQPB,    \
-                                            SoftConstraint as SC,      \
-                                            generate_controlled_values,\
-                                            QPSolverException
+
+from kineverse.motion import TQPB,    \
+                             SoftConstraint as SC,      \
+                             generate_controlled_values,\
+                             QPSolverException
 from kineverse.utils                 import union, \
                                             generate_transition_function, \
                                             static_var_bounds
@@ -32,15 +34,15 @@ class QPStateModel(object):
             transition_rules (dict, optional): Maps symbols to their transition rule.
                                                Rules will be generated automatically, if not provided here.
         """
-        state_vars = union([gm.free_symbols(o) for o in observations.values()])
+        state_vars = kv.utils.union([gm.free_symbols(o) for o in observations.values()])
 
         self.num_samples = num_samples
 
         self.ordered_vars,  \
         self.transition_fn, \
-        self.transition_args = generate_transition_function(QPStateModel.DT_SYM, 
-                                                            state_vars, 
-                                                            transition_rules)
+        self.transition_args = kv.utils.generate_transition_function(QPStateModel.DT_SYM, 
+                                                                     state_vars, 
+                                                                     transition_rules)
         self.command_vars = {s for s in self.transition_args 
                                 if s not in state_vars and str(s) != str(QPStateModel.DT_SYM)}
 
@@ -76,7 +78,7 @@ class QPStateModel(object):
                             obs_error  = gm.abs(obs_symbol - c)
                             constraint = SC(-obs_error - (1 - obs_switch_var) * 1e3,
                                             -obs_error + (1 - obs_switch_var) * 1e3, 1, obs_error)
-                            obs_constraints[o_label][f'{o_label}:{Path(obs_symbol)}'] = constraint
+                            obs_constraints[o_label][f'{o_label}:{kv.Path(obs_symbol)}'] = constraint
                             self.obs_vars[o_label].append(obs_symbol)
                             indices.append(coords[0] * o.shape[1] + coords[1])
 
@@ -87,21 +89,21 @@ class QPStateModel(object):
                     obs_error  = gm.abs(obs_symbol - c)
                     constraint = SC(-obs_error - obs_switch_var * 1e9, 
                                     -obs_error + obs_switch_var * 1e9, 1, obs_error)
-                    obs_constraints[o_label][f'{o_label}:{Path(obs_symbol)}'] = constraint
+                    obs_constraints[o_label][f'{o_label}:{kv.Path(obs_symbol)}'] = constraint
 
                     self.obs_vars[o_label].append(obs_symbol)
                     self.takers[o_label] = [0]
 
         state_constraints = km.get_constraints_by_symbols(state_vars)
 
-        cvs, hard_constraints = generate_controlled_values(state_constraints, 
-                                                           {gm.DiffSymbol(s) for s in state_vars 
-                                                                             if gm.get_symbol_type(s) != gm.TYPE_UNKNOWN})
+        cvs, hard_constraints = kv.utils.generate_controlled_values(state_constraints, 
+                                                                    {gm.DiffSymbol(s) for s in state_vars 
+                                                                                      if gm.get_symbol_type(s) != gm.TYPE_UNKNOWN})
         flat_obs_constraints = dict(sum([list(oc.items()) for oc in obs_constraints.values()], []))
 
         self.qp = TQPB(hard_constraints, flat_obs_constraints, cvs)
 
-        st_bound_vars, st_bounds, st_unbounded = static_var_bounds(km, state_vars)
+        st_bound_vars, st_bounds, st_unbounded = kv.utils.static_var_bounds(km, state_vars)
         self._state = {s: 0 for s in st_unbounded} # np.random.uniform(-1.0, 1.0) for s in st_unbounded}
 
         for vb, (lb, ub) in zip(st_bound_vars, st_bounds):
