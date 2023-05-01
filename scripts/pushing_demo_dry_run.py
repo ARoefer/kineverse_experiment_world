@@ -162,8 +162,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Plans motions for closing doors and drawers in the IAI kitchen environment using various robots.')
     parser.add_argument('--robot', '-r', default='pr2', help='Name of the robot to use. Will look for package://ROBOT_description/robot/ROBOT.urdf')
     parser.add_argument('--omni', type=str2bool, default=True, help='To use an omnidirectional base or not.')
-    parser.add_argument('--nav', type=str, default='linear', help='Heuristic for navigating object geometry. [ cross |  linear | cubic ]')
-    parser.add_argument('--vis-plan', type=str, default='after', help='Visualize trajector while planning. [ during | after | none ]')
+    parser.add_argument('--nav', type=str, default='cross', help='Heuristic for navigating object geometry. [ cross |  linear | cubic ]')
+    parser.add_argument('--vis-plan', type=str, default='during', help='Visualize trajector while planning. [ during | none ]')
     parser.add_argument('--link', type=str, default=None, help='Link of the robot to use for actuation.')
     parser.add_argument('--camera', type=str, default=None, help='Camera link of the robot.')
 
@@ -239,14 +239,10 @@ if __name__ == '__main__':
                          wheel_distance=0.3748,
                          wheel_vel_limit=17.4)
     km.dispatch_events()
+    km.clean_structure()
 
     # Visualization of the trajectory
     visualizer = ROSBPBVisualizer('/vis_pushing_demo', base_frame='world')
-    traj_vis   = TrajectoryVisualizer(visualizer)
-
-    traj_vis.add_articulated_object(Path(robot),     km.get_data(robot))
-    # traj_vis.add_articulated_object(Path('kitchen'), km.get_data('kitchen'))
-
 
     # GOAL DEFINITION
     eef_path = Path(f'{robot}/links/{robot_link}')
@@ -317,29 +313,16 @@ if __name__ == '__main__':
             weights[base_joint.r_wheel_vel] = 0.001
 
 
-
-        if args.vis_plan == 'during':
-            pushing_controller = PushingController(km,
-                                                   eef_path,
-                                                   part_path,
-                                                   robot_controlled_symbols,
-                                                   start_state,
-                                                   cam_path,
-                                                   use_geom_circulation,
-                                                   visualizer,
-                                                   weights,
-                                                   collision_avoidance_paths=active_parts_to_avoid)
-        else:
-            pushing_controller = PushingController(km,
-                                                   eef_path,
-                                                   part_path,
-                                                   robot_controlled_symbols,
-                                                   start_state,
-                                                   cam_path,
-                                                   use_geom_circulation,
-                                                   None,
-                                                   weights,
-                                                   collision_avoidance_paths=active_parts_to_avoid)
+        pushing_controller = PushingController(km,
+                                                eef_path,
+                                                part_path,
+                                                robot_controlled_symbols,
+                                                start_state,
+                                                cam_path,
+                                                use_geom_circulation,
+                                                visualizer,
+                                                weights,
+                                                collision_avoidance_paths=active_parts_to_avoid)
 
         if robot in start_poses:
             start_state.update({gm.Position(Path(robot) + (k,)): v for k, v in start_poses[robot].items()})
@@ -407,14 +390,8 @@ if __name__ == '__main__':
             # draw_recorders([rec_c], 0.5, 4, 2.5).savefig('{}/{}_sandbox_{}_plots.png'.format(plot_dir, robot, part))
             # draw_recorders([rec_b, rec_c] + [r for _, r in sorted(recs.items())], 1, 8, 4).savefig('{}/{}_sandbox_{}_constraints.png'.format(plot_dir, robot, part))
 
-        if args.vis_plan == 'after':
-            traj_vis.visualize(integrator.recorder.data, hz=50)
-            pass
-
         if rospy.is_shutdown():
           break
-
-    traj_vis.shutdown()
 
     print('Mean Iter: {}\nMean Iter D: {:>2.6f}\nIter D SD: {:>2.6f}\nMean planning duration: {:>2.6f}s'.format(np.mean(n_iter),
                                                                  np.mean([d / float(i) for d, i in zip(total_dur, n_iter)]),
